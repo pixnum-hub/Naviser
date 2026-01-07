@@ -135,43 +135,18 @@ let map, userMarker, markers=[], line;
 let km=true;
 
 /* -------- MAP VARIATIONS -------- */
-const standardMap = L.tileLayer(
- 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
- {maxZoom:19, subdomains:'abc'}
-);
-const satelliteMap = L.tileLayer(
- 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
- {maxZoom:19}
-);
+const standardMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, subdomains:'abc'});
+const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
 const hybridMap = L.layerGroup([
- L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  {maxZoom:19}
- ),
- L.tileLayer(
-  'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-  {maxZoom:19, subdomains:'abc'}
- )
+ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
+ L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',{maxZoom:19, subdomains:'abc'})
 ]);
-const terrainMap = L.tileLayer(
- 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
- {maxZoom:17, subdomains:'abc'}
-);
-const darkMap = L.tileLayer(
- 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
- {maxZoom:19}
-);
-const minimalMap = L.tileLayer(
- 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
- {maxZoom:19}
-);
+const terrainMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17, subdomains:'abc'});
+const darkMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19});
+const minimalMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19});
 
 /* -------- MAP INIT -------- */
-map = L.map('map',{
- center:[20,78],
- zoom:5,
- layers:[standardMap]
-});
+map = L.map('map',{ center:[20,78], zoom:5, layers:[standardMap] });
 L.control.layers({
  "🗺️ Standard":standardMap,
  "🛰️ Satellite":satelliteMap,
@@ -185,63 +160,46 @@ map.on('baselayerchange',()=>{ setTimeout(()=>map.invalidateSize(),200); });
 /* -------- GEOLOCATION -------- */
 navigator.geolocation.watchPosition(p=>{
  const {latitude,longitude,accuracy,altitude}=p.coords;
- if(!userMarker){
-  userMarker=L.marker([latitude,longitude]).addTo(map);
-  map.setView([latitude,longitude],15);
- }else userMarker.setLatLng([latitude,longitude]);
-
+ if(!userMarker){ userMarker=L.marker([latitude,longitude]).addTo(map); map.setView([latitude,longitude],15); }
+ else userMarker.setLatLng([latitude,longitude]);
  document.getElementById('locInfo').innerHTML=
- `Lat: ${latitude.toFixed(5)}<br>
-  Lng: ${longitude.toFixed(5)}<br>
-  Accuracy: ${accuracy} m<br>
-  Altitude: ${altitude ?? 'N/A'}`;
+ `Lat: ${latitude.toFixed(5)}<br>Lng: ${longitude.toFixed(5)}<br>Accuracy: ${accuracy} m<br>Altitude: ${altitude ?? 'N/A'}`;
 });
 
 /* -------- MARKERS & DISTANCE -------- */
-function addMarker(){
- const c=map.getCenter();
- const m=L.marker(c,{draggable:true}).addTo(map);
- m.on('drag',calcDistance);
- markers.push(m);
- calcDistance();
-}
-function removeMarker(){
- if(markers.length){
-  map.removeLayer(markers.pop());
-  calcDistance();
- }
-}
 function calcDistance(){
  if(line) map.removeLayer(line);
- if(markers.length<2){
-  document.getElementById('distInfo').innerText='Distance: 0';
-  return;
- }
+ if(markers.length<2){ document.getElementById('distInfo').innerText='Distance: 0'; return; }
  const pts=markers.map(m=>m.getLatLng());
  line=L.polyline(pts).addTo(map);
  let d=0;
- for(let i=1;i<pts.length;i++)
-  d+=pts[i-1].distanceTo(pts[i]);
- document.getElementById('distInfo').innerText=
- `Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mile'}`;
+ for(let i=1;i<pts.length;i++) d+=pts[i-1].distanceTo(pts[i]);
+ document.getElementById('distInfo').innerText=`Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mile'}`;
 }
 function toggleUnit(){km=!km; calcDistance();}
 
+/* -------- IndexedDB for offline markers -------- */
+let db;
+const request = indexedDB.open("NaviserDB",1);
+request.onerror=()=>console.log("IndexedDB failed");
+request.onsuccess=()=>{ db=request.result; loadMarkersFromDB(); };
+request.onupgradeneeded=e=>{ db=e.target.result; if(!db.objectStoreNames.contains("markers")) db.createObjectStore("markers",{keyPath:"id",autoIncrement:true}); };
+
+function saveMarkerToDB(lat,lng){ if(!db) return; const tx=db.transaction("markers","readwrite"); tx.objectStore("markers").add({lat,lng}); }
+function removeMarkerFromDB(){ if(!db) return; const tx=db.transaction("markers","readwrite"); tx.objectStore("markers").openCursor(null,'prev').onsuccess=function(e){ const cursor=e.target.result; if(cursor) cursor.delete(); }; }
+function loadMarkersFromDB(){ if(!db) return; const tx=db.transaction("markers","readonly"); const store=tx.objectStore("markers"); store.openCursor().onsuccess=function(e){ const cursor=e.target.result; if(cursor){ const m=L.marker([cursor.value.lat,cursor.value.lng],{draggable:true}).addTo(map); m.on('drag',()=>{ calcDistance(); updateMarkerInDB(); }); markers.push(m); cursor.continue(); } calcDistance(); }; }
+function updateMarkerInDB(){ if(!db) return; const tx=db.transaction("markers","readwrite"); const store=tx.objectStore("markers"); store.clear().onsuccess=()=>{ markers.forEach(m=>store.add({lat:m.getLatLng().lat,lng:m.getLatLng().lng})); }; }
+
+/* --- Add/Remove Marker --- */
+function addMarker(){ const c=map.getCenter(); const m=L.marker(c,{draggable:true}).addTo(map); m.on('drag',()=>{ calcDistance(); updateMarkerInDB(); }); markers.push(m); saveMarkerToDB(c.lat,c.lng); calcDistance(); }
+function removeMarker(){ if(markers.length){ map.removeLayer(markers.pop()); removeMarkerFromDB(); calcDistance(); }}
+
 /* -------- THEME -------- */
-themeToggle.onclick=()=>{
- document.body.classList.toggle('dark');
- themeToggle.textContent = themeToggle.textContent==='🌙'?'☀️':'🌙';
-};
+themeToggle.onclick=()=>{ document.body.classList.toggle('dark'); themeToggle.textContent=themeToggle.textContent==='🌙'?'☀️':'🌙'; };
 
 /* -------- FULLSCREEN -------- */
 const fsBtn=document.getElementById('fullscreenToggle');
-fsBtn.onclick=()=>{
- if(!document.fullscreenElement){
-  document.documentElement.requestFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300));
- }else{
-  document.exitFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300));
- }
-};
+fsBtn.onclick=()=>{ if(!document.fullscreenElement){ document.documentElement.requestFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300)); }else{ document.exitFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300)); } };
 document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
 
 /* -------- OFFLINE -------- */
@@ -250,10 +208,8 @@ window.addEventListener('online',net);
 window.addEventListener('offline',net);
 net();
 
-/* -------- PWA -------- */
-if('serviceWorker' in navigator){
- navigator.serviceWorker.register('sw.js');
-}
+/* -------- PWA SERVICE WORKER -------- */
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js'); }
 </script>
 </body>
 </html>
