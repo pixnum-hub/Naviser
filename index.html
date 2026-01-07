@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Naviser</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+body{
+  margin:0;
+  font-family:system-ui;
+  background:#0f172a;
+  color:#fff;
+}
+#app{
+  max-width:480px;
+  margin:auto;
+  padding:10px;
+  position:relative;
+}
+#map{
+  height:55vh;
+  border-radius:20px;
+}
+.panel{
+  backdrop-filter: blur(14px);
+  background: rgba(255,255,255,0.15);
+  border-radius:16px;
+  padding:10px;
+  margin-top:10px;
+}
+#themeToggle, #fullscreenToggle{
+  position:absolute;
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  border:none;
+  font-size:18px;
+  backdrop-filter: blur(14px);
+  background: rgba(255,255,255,0.15);
+  color:white;
+  z-index:5000;
+}
+#themeToggle{top:10px; right:10px;}
+#fullscreenToggle{top:60px; right:10px;}
+#toolbar{
+  position:fixed;
+  bottom:80px;
+  left:50%;
+  transform:translateX(-50%);
+  width:92%;
+  max-width:420px;
+  z-index:4000;
+}
+#toolbar button{
+  width:48%;
+  margin:4px 1%;
+}
+#infoBox{
+  position:fixed;
+  bottom:200px;
+  left:50%;
+  transform:translateX(-50%);
+  width:92%;
+  max-width:420px;
+  font-size:13px;
+  z-index:3000;
+}
+footer{
+  text-align:center;
+  font-size:12px;
+  margin-top:130px;
+  opacity:.6;
+}
+.leaflet-control-layers{
+  max-height:70vh;
+  overflow-y:auto;
+  font-size:14px;
+}
+#offline{
+  position:fixed;
+  bottom:10px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#dc2626;
+  padding:6px 14px;
+  border-radius:20px;
+  display:none;
+  z-index:9999;
+}
+/* FULLSCREEN */
+:fullscreen #map{
+  height:100vh !important;
+  border-radius:0;
+}
+:fullscreen #toolbar,
+:fullscreen #infoBox,
+:fullscreen footer{
+  display:none;
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+<button id="themeToggle">🌙</button>
+<button id="fullscreenToggle" title="Fullscreen">⛶</button>
+
+<div id="map"></div>
+
+<div id="infoBox" class="panel">
+<div id="locInfo">Waiting for GPS…</div>
+<div id="distInfo">Distance: 0 km</div>
+</div>
+
+<div id="toolbar" class="panel">
+<button onclick="addMarker()">➕ Add Marker</button>
+<button onclick="removeMarker()">➖ Remove Marker</button>
+<button onclick="toggleUnit()">📏 KM / Mile</button>
+</div>
+
+<footer>© Mamik Roy 2025. All Rights Reserved.</footer>
+</div>
+
+<div id="offline">Offline Mode</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+let map, userMarker, markers=[], line;
+let km=true;
+
+/* -------- MAP VARIATIONS -------- */
+const standardMap = L.tileLayer(
+ 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+ {maxZoom:19, subdomains:'abc'}
+);
+const satelliteMap = L.tileLayer(
+ 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+ {maxZoom:19}
+);
+const hybridMap = L.layerGroup([
+ L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:19}
+ ),
+ L.tileLayer(
+  'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+  {maxZoom:19, subdomains:'abc'}
+ )
+]);
+const terrainMap = L.tileLayer(
+ 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+ {maxZoom:17, subdomains:'abc'}
+);
+const darkMap = L.tileLayer(
+ 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+ {maxZoom:19}
+);
+const minimalMap = L.tileLayer(
+ 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+ {maxZoom:19}
+);
+
+/* -------- MAP INIT -------- */
+map = L.map('map',{
+ center:[20,78],
+ zoom:5,
+ layers:[standardMap]
+});
+L.control.layers({
+ "🗺️ Standard":standardMap,
+ "🛰️ Satellite":satelliteMap,
+ "🧱 Hybrid":hybridMap,
+ "⛰️ Terrain":terrainMap,
+ "🌙 Dark":darkMap,
+ "🧾 Minimal":minimalMap
+},{},{collapsed:false}).addTo(map);
+map.on('baselayerchange',()=>{ setTimeout(()=>map.invalidateSize(),200); });
+
+/* -------- GEOLOCATION -------- */
+navigator.geolocation.watchPosition(p=>{
+ const {latitude,longitude,accuracy,altitude}=p.coords;
+ if(!userMarker){
+  userMarker=L.marker([latitude,longitude]).addTo(map);
+  map.setView([latitude,longitude],15);
+ }else userMarker.setLatLng([latitude,longitude]);
+
+ document.getElementById('locInfo').innerHTML=
+ `Lat: ${latitude.toFixed(5)}<br>
+  Lng: ${longitude.toFixed(5)}<br>
+  Accuracy: ${accuracy} m<br>
+  Altitude: ${altitude ?? 'N/A'}`;
+});
+
+/* -------- MARKERS & DISTANCE -------- */
+function addMarker(){
+ const c=map.getCenter();
+ const m=L.marker(c,{draggable:true}).addTo(map);
+ m.on('drag',calcDistance);
+ markers.push(m);
+ calcDistance();
+}
+function removeMarker(){
+ if(markers.length){
+  map.removeLayer(markers.pop());
+  calcDistance();
+ }
+}
+function calcDistance(){
+ if(line) map.removeLayer(line);
+ if(markers.length<2){
+  document.getElementById('distInfo').innerText='Distance: 0';
+  return;
+ }
+ const pts=markers.map(m=>m.getLatLng());
+ line=L.polyline(pts).addTo(map);
+ let d=0;
+ for(let i=1;i<pts.length;i++)
+  d+=pts[i-1].distanceTo(pts[i]);
+ document.getElementById('distInfo').innerText=
+ `Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mile'}`;
+}
+function toggleUnit(){km=!km; calcDistance();}
+
+/* -------- THEME -------- */
+themeToggle.onclick=()=>{
+ document.body.classList.toggle('dark');
+ themeToggle.textContent = themeToggle.textContent==='🌙'?'☀️':'🌙';
+};
+
+/* -------- FULLSCREEN -------- */
+const fsBtn=document.getElementById('fullscreenToggle');
+fsBtn.onclick=()=>{
+ if(!document.fullscreenElement){
+  document.documentElement.requestFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300));
+ }else{
+  document.exitFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300));
+ }
+};
+document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
+
+/* -------- OFFLINE -------- */
+function net(){ offline.style.display=navigator.onLine?'none':'block'; }
+window.addEventListener('online',net);
+window.addEventListener('offline',net);
+net();
+
+/* -------- PWA -------- */
+if('serviceWorker' in navigator){
+ navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
