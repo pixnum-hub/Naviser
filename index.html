@@ -92,13 +92,14 @@ footer{
   z-index:9999;
 }
 /* FULLSCREEN */
-:fullscreen #map{
+:fullscreen #map {
   height:100vh !important;
-  border-radius:0;
+  width:100vw !important;
+  border-radius:0 !important;
 }
 :fullscreen #toolbar,
 :fullscreen #infoBox,
-:fullscreen footer{
+:fullscreen footer {
   display:none;
 }
 </style>
@@ -197,10 +198,16 @@ function removeMarker(){ if(markers.length){ map.removeLayer(markers.pop()); rem
 /* -------- THEME -------- */
 themeToggle.onclick=()=>{ document.body.classList.toggle('dark'); themeToggle.textContent=themeToggle.textContent==='🌙'?'☀️':'🌙'; };
 
-/* -------- FULLSCREEN -------- */
+/* -------- FULLSCREEN FIXED -------- */
 const fsBtn=document.getElementById('fullscreenToggle');
-fsBtn.onclick=()=>{ if(!document.fullscreenElement){ document.documentElement.requestFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300)); }else{ document.exitFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300)); } };
-document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
+fsBtn.onclick=()=>{
+ if(!document.fullscreenElement){
+  document.documentElement.requestFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300));
+ }else{
+  document.exitFullscreen().then(()=>setTimeout(()=>map.invalidateSize(),300));
+ }
+};
+document.addEventListener('fullscreenchange',()=>{ setTimeout(()=>map.invalidateSize(),300); });
 
 /* -------- OFFLINE -------- */
 function net(){ offline.style.display=navigator.onLine?'none':'block'; }
