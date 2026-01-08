@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Naviser GPS Lite</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+body {
+  margin:0;
+  font-family: system-ui, sans-serif;
+  background:#0b1220;
+  color:#fff;
+  display:flex;
+  justify-content:center;
+}
+#app {
+  width:100%;
+  max-width:480px;
+  padding:10px;
+}
+#map {
+  height:60vh;
+  border-radius:18px;
+  overflow:hidden;
+  touch-action: none;
+}
+.panel {
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(12px);
+  border-radius:14px;
+  padding:10px;
+  margin-top:8px;
+  font-size:13px;
+  overflow:auto;
+}
+button {
+  border:none;
+  border-radius:12px;
+  padding:8px;
+  font-size:13px;
+  background:#1e293b;
+  color:#fff;
+  cursor:pointer;
+  margin:2px 0;
+}
+button:active { transform:scale(.97); }
+#distance { margin-top:5px; font-weight:bold; }
+footer { text-align:center; font-size:11px; opacity:.6; margin-top:10px; }
+#enableGPSBtn { display:block; margin-top:5px; background:#2563eb; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="map"></div>
+
+  <div class="panel">
+    <button id="enableGPSBtn">📡 Enable GPS</button>
+    <button id="followBtn">📍 Follow Me: ON</button>
+    <div id="gpsStatus">Waiting for GPS…</div>
+    <div id="loc"></div>
+    <div id="distance"></div>
+    <button id="addMarkerBtn">➕ Add Marker</button>
+    <button id="removeMarkerBtn">➖ Remove Marker</button>
+  </div>
+
+  <footer>© Manik Roy 2026. All Rights Reserved.</footer>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+
+// --- Map ---
+let map = L.map('map').setView([20,78],5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+// --- Variables ---
+let userMarker, markers=[], line=null;
+let followUser = true; // Follow user by default
+let watchId = null;
+
+const enableGPSBtn = document.getElementById('enableGPSBtn');
+const followBtn = document.getElementById('followBtn');
+const gpsStatus = document.getElementById('gpsStatus');
+const loc = document.getElementById('loc');
+const distanceEl = document.getElementById('distance');
+
+// --- GPS Function ---
+function startGPS(){
+  if(!navigator.geolocation){
+    gpsStatus.innerText="❌ GPS not supported";
+    return;
+  }
+  gpsStatus.innerText="📡 Acquiring GPS…";
+  enableGPSBtn.style.display = "none";
+
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+
+  watchId = navigator.geolocation.watchPosition(pos=>{
+    gpsStatus.innerText="✅ GPS Active";
+    let c = pos.coords;
+
+    // Update or create user marker
+    if(!userMarker){
+      userMarker = L.marker([c.latitude,c.longitude]).addTo(map);
+      if(followUser) map.setView([c.latitude,c.longitude],16);
+    } else {
+      userMarker.setLatLng([c.latitude,c.longitude]);
+      // Pan only if followUser is ON
+      if(followUser) map.panTo([c.latitude,c.longitude], {animate:true, duration:0.5});
+    }
+
+    // Update GPS info
+    loc.innerText = `📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)} ±${Math.round(c.accuracy)}m`;
+
+  }, err=>{
+    if(err.code === 1){
+      gpsStatus.innerText = "❌ GPS Denied by user. Please enable location.";
+      enableGPSBtn.style.display = "block";
+    } else {
+      gpsStatus.innerText = "❌ GPS Error: "+err.message;
+      if(err.code===3) setTimeout(startGPS,5000);
+    }
+  }, {enableHighAccuracy:true, timeout:20000, maximumAge:0});
+}
+
+// --- Buttons ---
+enableGPSBtn.onclick = startGPS;
+
+// Follow Me toggle
+followBtn.onclick = () => {
+  followUser = !followUser;
+  followBtn.innerText = `📍 Follow Me: ${followUser ? 'ON':'OFF'}`;
+};
+
+// --- Disable follow automatically on manual pan/zoom ---
+map.on('dragstart zoomstart', ()=>{
+  followUser = false;
+  followBtn.innerText = "📍 Follow Me: OFF";
+});
+
+// --- Markers ---
+document.getElementById('addMarkerBtn').onclick = () => {
+  let m = L.marker(map.getCenter(), {draggable:true}).addTo(map);
+  m.on('drag', updateDistance);
+  markers.push(m);
+  updateDistance();
+};
+document.getElementById('removeMarkerBtn').onclick = () => {
+  if(markers.length){ map.removeLayer(markers.pop()); updateDistance(); }
+  if(markers.length===0){ distanceEl.innerText=''; if(line){ map.removeLayer(line); line=null; } }
+};
+
+// --- Distance ---
+function updateDistance(){
+  if(line){ map.removeLayer(line); line=null; }
+  if(markers.length>1){
+    line = L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
+    let d=0;
+    for(let i=1;i<markers.length;i++) d += markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
+    distanceEl.innerText = `📏 Distance: ${(d/1000).toFixed(2)} km`;
+  } else { distanceEl.innerText=''; }
+}
+
+});
+</script>
+</body>
+</html>
