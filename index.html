@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Naviser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
@@ -21,7 +22,7 @@ body{
 #app{
   width:100%;
   max-width:480px;
-  padding:10px;
+  padding:12px;
   position:relative;
 }
 
@@ -32,57 +33,73 @@ body{
   overflow:hidden;
 }
 
-/* UI */
+/* GLASS PANEL */
 .panel{
   backdrop-filter:blur(14px);
   background:rgba(255,255,255,.15);
   border-radius:16px;
   padding:10px;
 }
+
+/* BUTTONS */
 button{
   border:none;
   border-radius:12px;
   padding:8px;
   font-size:14px;
+  cursor:pointer;
+  margin:2px 0;
 }
+
+/* FLOATING ROUND BUTTONS */
 .round{
   position:absolute;
   width:40px;
   height:40px;
   border-radius:50%;
   backdrop-filter:blur(14px);
-  background:rgba(255,255,255,.15);
+  background:rgba(255,255,255,.18);
   color:white;
   z-index:3000;
 }
-#themeToggle{top:10px;right:10px;}
-#fullscreenToggle{top:60px;right:10px;}
-#installBtn{top:110px;right:10px;display:none;}
+#fullscreenToggle{top:10px;right:10px;}
+#installBtn{top:60px;right:10px;display:none;}
+#layersToggle{top:110px;right:10px;}
 
+/* INFO */
 #infoBox{
   margin-top:10px;
   font-size:13px;
+  line-height:1.4;
 }
 
+/* TOOLBAR */
 #toolbar{
   margin-top:10px;
   display:flex;
-  gap:6px;
+  gap:8px;
   flex-wrap:wrap;
 }
 #toolbar button{flex:1 1 48%;}
 
+/* LAYERS PANEL */
+#layersPanel{
+  display:none;
+  margin-top:10px;
+}
+
+/* FOOTER */
 footer{
   text-align:center;
   font-size:12px;
-  margin-top:16px;
+  margin-top:18px;
   opacity:.6;
 }
 
 /* OFFLINE */
 #offline{
   position:fixed;
-  bottom:10px;
+  bottom:12px;
   left:50%;
   transform:translateX(-50%);
   background:#dc2626;
@@ -92,33 +109,30 @@ footer{
   z-index:9000;
 }
 
-/* ===== FULLSCREEN (CORRECTED) ===== */
+/* FULLSCREEN FIX */
 #app:fullscreen{
   max-width:none;
   width:100vw;
   height:100vh;
   padding:0;
 }
-
 #app:fullscreen #map{
   height:100%;
-  width:100%;
   border-radius:0;
 }
-
 #app:fullscreen #toolbar,
 #app:fullscreen footer{
   display:none;
 }
-
-#app:fullscreen #infoBox{
+#app:fullscreen #infoBox,
+#app:fullscreen #layersPanel{
   position:absolute;
-  bottom:10px;
   left:10px;
   right:10px;
   z-index:4000;
-  background:rgba(0,0,0,0.35);
 }
+#app:fullscreen #infoBox{bottom:10px;}
+#app:fullscreen #layersPanel{top:60px;}
 </style>
 </head>
 
@@ -126,11 +140,20 @@ footer{
 
 <div id="app">
 
-<button id="themeToggle" class="round">🌙</button>
 <button id="fullscreenToggle" class="round">⛶</button>
 <button id="installBtn" class="round">⬇️</button>
+<button id="layersToggle" class="round">🗺️</button>
 
 <div id="map"></div>
+
+<div id="layersPanel" class="panel">
+  <strong>Map Variations</strong><br>
+  <button onclick="setLayer('osm')">🗺️ Standard</button>
+  <button onclick="setLayer('sat')">🛰️ Satellite</button>
+  <button onclick="setLayer('terrain')">🌄 Terrain</button>
+  <button onclick="setLayer('topo')">🧭 Topographic</button>
+  <button onclick="setLayer('dark')">🌙 Dark Map</button>
+</div>
 
 <div id="infoBox" class="panel">
   <div id="locInfo">Waiting for GPS…</div>
@@ -149,12 +172,32 @@ footer{
 <div id="offline">Offline Mode</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
-let map,userMarker,markers=[],line,km=true;
 
-/* MAP */
-map=L.map('map',{center:[20,78],zoom:5});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+<script>
+let map,userMarker,markers=[],line,km=true,activeLayer;
+
+/* MAP LAYERS (NO API KEY) */
+const layers={
+ osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
+ sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
+ terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17}),
+ topo:L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',{maxZoom:19}),
+ dark:L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png',{maxZoom:19})
+};
+
+map=L.map('map',{center:[20,78],zoom:5,layers:[layers.osm]});
+activeLayer=layers.osm;
+
+/* LAYER SWITCH */
+function setLayer(name){
+ map.removeLayer(activeLayer);
+ activeLayer=layers[name];
+ map.addLayer(activeLayer);
+ layersPanel.style.display='none';
+}
+layersToggle.onclick=()=>{
+ layersPanel.style.display=layersPanel.style.display==='none'?'block':'none';
+};
 
 /* GEOLOCATION */
 navigator.geolocation.watchPosition(p=>{
@@ -165,16 +208,15 @@ navigator.geolocation.watchPosition(p=>{
  }else userMarker.setLatLng([c.latitude,c.longitude]);
 
  locInfo.innerHTML=
- `Lat: ${c.latitude.toFixed(5)}<br>
-  Lng: ${c.longitude.toFixed(5)}<br>
-  Accuracy: ${c.accuracy} m<br>
-  Altitude: ${c.altitude ?? 'N/A'}`;
-});
+  `Lat: ${c.latitude.toFixed(5)}<br>
+   Lng: ${c.longitude.toFixed(5)}<br>
+   Accuracy: ${c.accuracy} m<br>
+   Altitude: ${c.altitude ?? 'N/A'}`;
+},{enableHighAccuracy:true});
 
 /* MARKERS */
 function addMarker(){
- const c=map.getCenter();
- const m=L.marker(c,{draggable:true}).addTo(map);
+ const m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
  m.on('drag',calcDistance);
  markers.push(m);
  calcDistance();
@@ -185,6 +227,8 @@ function removeMarker(){
   calcDistance();
  }
 }
+
+/* DISTANCE */
 function calcDistance(){
  if(line) map.removeLayer(line);
  if(markers.length<2){distInfo.innerText='Distance: 0';return;}
@@ -196,11 +240,10 @@ function calcDistance(){
 }
 function toggleUnit(){km=!km;calcDistance();}
 
-/* FULLSCREEN (APP ONLY) */
+/* FULLSCREEN */
 fullscreenToggle.onclick=()=>{
  const app=document.getElementById('app');
- if(!document.fullscreenElement) app.requestFullscreen();
- else document.exitFullscreen();
+ !document.fullscreenElement?app.requestFullscreen():document.exitFullscreen();
 };
 document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
 
@@ -227,5 +270,6 @@ installBtn.onclick=async()=>{
 if('serviceWorker' in navigator)
  navigator.serviceWorker.register('sw.js');
 </script>
+
 </body>
 </html>
