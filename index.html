@@ -2,199 +2,149 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Naviser</title>
+<title>Naviser Lite</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
 <style>
-body{margin:0;background:#0b1220;font-family:system-ui;color:#fff;display:flex;justify-content:center}
-#app{width:100%;max-width:480px;padding:10px;position:relative}
-#map{height:55vh;border-radius:18px;overflow:hidden}
-.panel{background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border-radius:14px;padding:10px;margin-top:8px}
-button{border:none;border-radius:12px;padding:8px;font-size:13px;background:#1e293b;color:#fff}
-button:active{transform:scale(.97)}
-#floating{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:8px;z-index:3000}
-.round{width:40px;height:40px;border-radius:50%}
-
-/* Compass */
-#compassWrap{display:flex;align-items:center;gap:10px}
-#compassRing{width:40px;height:40px;border-radius:50%;border:2px solid #94a3b8;position:relative}
-#needle{width:2px;height:18px;background:red;position:absolute;left:50%;top:2px;transform-origin:bottom}
-
-/* Route list */
-.route{display:flex;justify-content:space-between;margin:4px 0;font-size:12px}
-
-/* Fullscreen */
-#app:fullscreen{padding:0}
-#app:fullscreen #map{height:100vh;border-radius:0}
-#app:fullscreen .hideFS{display:none}
+body {
+  margin:0;
+  font-family: system-ui, sans-serif;
+  background:#0b1220;
+  color:#fff;
+  display:flex;
+  justify-content:center;
+}
+#app {
+  width:100%;
+  max-width:480px;
+  padding:10px;
+}
+#map {
+  height:60vh;
+  border-radius:18px;
+  overflow:hidden;
+  touch-action: none;
+}
+.panel {
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(12px);
+  border-radius:14px;
+  padding:10px;
+  margin-top:8px;
+  font-size:13px;
+  overflow:auto;
+}
+button {
+  border:none;
+  border-radius:12px;
+  padding:8px;
+  font-size:13px;
+  background:#1e293b;
+  color:#fff;
+  cursor:pointer;
+}
+button:active { transform:scale(.97); }
+#distance { margin-top:5px; font-weight:bold; }
+footer { text-align:center; font-size:11px; opacity:.6; margin-top:10px; }
+#enableGPSBtn { display:none; margin-top:5px; background:#2563eb; }
 </style>
 </head>
-
 <body>
 <div id="app">
 
-<div id="floating">
-<button id="fsBtn" class="round">⛶</button>
-<button id="layerBtn" class="round">🗺️</button>
-</div>
+  <div id="map"></div>
 
-<div id="map"></div>
+  <div class="panel">
+    <button id="gpsBtn">📡 Start GPS</button>
+    <button id="enableGPSBtn">✅ Enable GPS</button>
+    <div id="gpsStatus">Waiting for GPS…</div>
+    <div id="loc"></div>
+    <div id="distance"></div>
+    <button id="addMarkerBtn">➕ Add Marker</button>
+    <button id="removeMarkerBtn">➖ Remove Marker</button>
+  </div>
 
-<div class="panel">
-<div id="loc">📍 Waiting for GPS…</div>
-<div id="speed">📡 Speed: 0 km/h</div>
-<div id="bearing">🧭 Bearing: 0°</div>
-
-<div id="compassWrap">
-<div id="compassRing"><div id="needle"></div></div>
-<div id="heading">Heading: 0°</div>
-</div>
-
-<div id="distance">📏 Distance: 0 km</div>
-<div id="area">📐 Area: 0</div>
-</div>
-
-<div class="panel hideFS">
-<button onclick="addMarker()">➕ Marker</button>
-<button onclick="removeMarker()">➖ Marker</button>
-<button onclick="toggleUnit()">↔ Units</button>
-<button onclick="saveRoute()">💾 Save Route</button>
-<button onclick="clearArea()">❌ Clear Area</button>
-</div>
-
-<div class="panel hideFS">
-<b>Saved Routes</b>
-<div id="routes"></div>
-</div>
-
-<footer class="hideFS" style="text-align:center;font-size:11px;opacity:.6">
-© Manik Roy 2025. All Rights Reserved.
-</footer>
-
-</div>
+  <footer>© Manik Roy 2026. All Rights Reserved.</footer>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-geometryutil"></script>
-
 <script>
-let map=L.map('map').setView([20,78],5);
+document.addEventListener('DOMContentLoaded',()=>{
+
+// --- Map ---
+let map = L.map('map').setView([20,78],5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let userMarker,lastPos=null,markers=[],poly,line;
-let km=true,spdAvg=0;
+// --- Variables ---
+let userMarker, lastPos=null, markers=[], line=null;
+const gpsBtn = document.getElementById('gpsBtn');
+const enableGPSBtn = document.getElementById('enableGPSBtn');
+const gpsStatus = document.getElementById('gpsStatus');
+const loc = document.getElementById('loc');
+const distanceEl = document.getElementById('distance');
+let watchId = null;
 
-/* GPS */
-navigator.geolocation.watchPosition(p=>{
- const c=p.coords;
- if(!userMarker){
-  userMarker=L.marker([c.latitude,c.longitude]).addTo(map);
-  map.setView([c.latitude,c.longitude],15);
- } else userMarker.setLatLng([c.latitude,c.longitude]);
+// --- GPS Functions ---
+function startGPS(){
+  if(!navigator.geolocation){ gpsStatus.innerText="❌ GPS not supported"; return; }
+  gpsStatus.innerText="📡 Acquiring GPS…";
+  enableGPSBtn.style.display = "none";
 
- loc.innerHTML=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}`;
+  if(watchId) navigator.geolocation.clearWatch(watchId);
 
- let spd=(c.speed||0)*3.6;
- spdAvg=spdAvg*0.7+spd*0.3;
- speed.innerText=`📡 Speed: ${spdAvg.toFixed(1)} ${km?'km/h':'mph'}`;
-
- if(lastPos){
-  let b=bearingCalc(lastPos.lat,lastPos.lng,c.latitude,c.longitude);
-  bearing.innerText=`🧭 Bearing: ${Math.round(b)}°`;
- }
- lastPos={lat:c.latitude,lng:c.longitude};
-},{enableHighAccuracy:true});
-
-/* Compass */
-if(window.DeviceOrientationEvent){
- window.addEventListener('deviceorientation',e=>{
-  if(e.alpha!=null){
-   let h=Math.round(360-e.alpha);
-   needle.style.transform=`rotate(${h}deg)`;
-   heading.innerText=`Heading: ${h}°`;
-  }
- });
+  watchId = navigator.geolocation.watchPosition(pos=>{
+    gpsStatus.innerText="✅ GPS Active";
+    let c = pos.coords;
+    if(!userMarker){
+      userMarker = L.marker([c.latitude,c.longitude]).addTo(map);
+      map.setView([c.latitude,c.longitude],16);
+    } else {
+      userMarker.setLatLng([c.latitude,c.longitude]);
+      map.panTo([c.latitude,c.longitude], {animate:true, duration:0.5});
+    }
+    loc.innerText=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)} ±${Math.round(c.accuracy)}m`;
+    lastPos = {lat:c.latitude, lng:c.longitude};
+  }, err=>{
+    if(err.code === 1){ // Permission denied
+      gpsStatus.innerText="❌ GPS Denied by user";
+      enableGPSBtn.style.display = "block";
+    } else {
+      gpsStatus.innerText="❌ GPS Error: "+err.message;
+      if(err.code===3) setTimeout(startGPS,5000);
+    }
+  }, {enableHighAccuracy:true, timeout:20000, maximumAge:0});
 }
 
-/* Markers */
-function addMarker(){
- let m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
- m.on('drag',updateMetrics);
- markers.push(m);
- updateMetrics();
-}
-function removeMarker(){
- if(markers.length){
-  map.removeLayer(markers.pop());
-  updateMetrics();
- }
-}
+// --- Buttons ---
+gpsBtn.onclick = startGPS;
+enableGPSBtn.onclick = () => {
+  gpsStatus.innerText="📡 Requesting GPS permission...";
+  startGPS();
+};
 
-/* Distance + Area */
-function updateMetrics(){
- if(line) map.removeLayer(line);
- if(poly) map.removeLayer(poly);
-
- if(markers.length>1){
-  line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
-  let d=0;
-  for(let i=1;i<markers.length;i++)
-   d+=markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
-  distance.innerText=`📏 Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mi'}`;
- }
-
- if(markers.length>2){
-  poly=L.polygon(markers.map(m=>m.getLatLng())).addTo(map);
-  let a=L.GeometryUtil.geodesicArea(poly.getLatLngs()[0]);
-  area.innerText=`📐 Area: ${(a/1e6).toFixed(3)} km² | ${(a*0.000247).toFixed(2)} acres`;
- }
-}
-
-/* Save routes */
-function saveRoute(){
- let name=prompt('Route name?');
- if(!name||markers.length<2) return;
- let data=JSON.parse(localStorage.getItem('routes')||'{}');
- data[name]=markers.map(m=>m.getLatLng());
- localStorage.setItem('routes',JSON.stringify(data));
- loadRoutes();
-}
-function loadRoutes(){
- routes.innerHTML='';
- let data=JSON.parse(localStorage.getItem('routes')||'{}');
- for(let k in data){
-  let div=document.createElement('div');
-  div.className='route';
-  div.innerHTML=`${k}<span onclick="loadRoute('${k}')">▶</span>`;
-  routes.appendChild(div);
- }
-}
-function loadRoute(n){
- markers.forEach(m=>map.removeLayer(m));
- markers=[];
- JSON.parse(localStorage.getItem('routes'))[n].forEach(p=>{
-  let m=L.marker(p,{draggable:true}).addTo(map);
-  m.on('drag',updateMetrics);
+// --- Markers ---
+document.getElementById('addMarkerBtn').onclick = () => {
+  let m = L.marker(map.getCenter(), {draggable:true}).addTo(map);
+  m.on('drag', updateDistance);
   markers.push(m);
- });
- updateMetrics();
-}
-loadRoutes();
+  updateDistance();
+};
+document.getElementById('removeMarkerBtn').onclick = () => {
+  if(markers.length){ map.removeLayer(markers.pop()); updateDistance(); }
+  if(markers.length===0){ distanceEl.innerText=''; if(line){ map.removeLayer(line); line=null; } }
+};
 
-/* Utils */
-function toggleUnit(){km=!km;updateMetrics();}
-function clearArea(){if(poly)map.removeLayer(poly);area.innerText='📐 Area: 0';}
-function bearingCalc(lat1,lng1,lat2,lng2){
- let dLon=(lng2-lng1)*Math.PI/180;
- let y=Math.sin(dLon)*Math.cos(lat2*Math.PI/180);
- let x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-
-        Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
- return (Math.atan2(y,x)*180/Math.PI+360)%360;
+// --- Distance ---
+function updateDistance(){
+  if(line){ map.removeLayer(line); line=null; }
+  if(markers.length>1){
+    line = L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
+    let d=0;
+    for(let i=1;i<markers.length;i++) d += markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
+    distanceEl.innerText = `📏 Distance: ${(d/1000).toFixed(2)} km`;
+  } else { distanceEl.innerText=''; }
 }
 
-/* Fullscreen */
-fsBtn.onclick=()=>!document.fullscreenElement?app.requestFullscreen():document.exitFullscreen();
+});
 </script>
 </body>
 </html>
