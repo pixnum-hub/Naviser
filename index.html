@@ -9,8 +9,9 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
 body{margin:0;background:#0b1220;color:#fff;font-family:system-ui}
-#app{max-width:480px;margin:auto;padding:8px;display:flex;flex-direction:column;}
-#map{height:60vh;border-radius:16px;flex:1}
+#app{max-width:480px;margin:auto;padding:8px;display:flex;flex-direction:column; height:100vh;}
+#map{height:60vh; min-height:300px;border-radius:16px;flex:1}
+#app.fullscreen #map{height:calc(100vh - 300px); min-height:300px; border-radius:0;}
 .panel{
 background:rgba(255,255,255,.1);
 backdrop-filter:blur(10px);
@@ -23,31 +24,12 @@ background:#1e293b;color:#fff
 }
 footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
 
-/* FULLSCREEN */
-#app.fullscreen{
-width:100vw;height:100vh;padding:0;
-display:flex;flex-direction:column;
-}
-#app.fullscreen #map{
-height:calc(100vh - 300px);
-border-radius:0;
-}
-
 /* NORTH ARROW */
-#northArrow{
-position:fixed;top:14px;left:14px;width:42px;height:42px;
-border-radius:50%;background:#1e293b;
-display:flex;align-items:center;justify-content:center;
-font-weight:bold;z-index:99999;pointer-events:none;transition:opacity 0.3s;
-}
+#northArrow{position:fixed;top:14px;left:14px;width:42px;height:42px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:bold;z-index:99999;pointer-events:none;transition:opacity 0.3s}
 
 /* FLOATING FULLSCREEN BUTTON */
-#floatFS{
-position:fixed;bottom:20px;right:16px;width:52px;height:52px;
-border-radius:50%;background:#1e293b;border:none;color:#fff;font-size:20px;
-z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.5);opacity:0.5;transition: opacity 0.3s;cursor:pointer;
-}
-#floatFS:hover,#floatFS:active {opacity:1;}
+#floatFS{position:fixed;bottom:20px;right:16px;width:52px;height:52px;border-radius:50%;background:#1e293b;border:none;color:#fff;font-size:20px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.5);opacity:0.5;transition: opacity 0.3s;cursor:pointer;}
+#floatFS:hover,#floatFS:active{opacity:1}
 
 /* SEARCH BAR */
 #searchInput{background:#1e293b;color:#fff;font-size:14px;margin-bottom:4px;}
@@ -148,6 +130,7 @@ else layers[mapStyle.value].addTo(map);
 if(userMarker) userMarker.addTo(map);
 if(line) line.addTo(map);
 if(poly) poly.addTo(map);
+map.invalidateSize();
 };
 
 // --- FOLLOW ---
@@ -167,6 +150,7 @@ else{userMarker.setLatLng([c.latitude,c.longitude]); if(follow) map.panTo([c.lat
 loc.innerText=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}`;
 speed.innerText=`🚀 Speed: ${(c.speed?c.speed*3.6:0).toFixed(1)} km/h`;
 updateNav(c.latitude,c.longitude);
+map.invalidateSize();
 },err=>{gpsStatus.innerText="❌ GPS Denied"; gpsBtn.style.display="block";},{enableHighAccuracy:true});
 }
 
@@ -175,6 +159,7 @@ const floatFS=document.getElementById("floatFS");
 floatFS.onclick=()=>{
 if(!document.fullscreenElement){app.requestFullscreen(); app.classList.add("fullscreen"); floatFS.innerText="❎";}
 else{document.exitFullscreen(); app.classList.remove("fullscreen"); floatFS.innerText="⛶";}
+setTimeout(()=>map.invalidateSize(),300);
 }
 
 // --- AUTO FADE BUTTON ---
