@@ -2,21 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Naviser GPS Pro</title>
+<title>Naviser Pro</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.css"/>
 
 <style>
 body{margin:0;background:#0b1220;color:#fff;font-family:system-ui}
 #app{max-width:480px;margin:auto;padding:8px}
 #map{height:60vh;border-radius:16px}
-.panel{background:rgba(255,255,255,.1);backdrop-filter:blur(10px);
+
+.panel{background:rgba(255,255,255,.1);
+backdrop-filter:blur(10px);
 border-radius:14px;padding:8px;margin-top:6px;font-size:13px}
-button,select{width:100%;margin-top:4px;padding:8px;border-radius:10px;
-border:none;background:#1e293b;color:#fff}
+
+button,select{
+width:100%;margin-top:4px;padding:8px;
+border-radius:10px;border:none;
+background:#1e293b;color:#fff
+}
+
 footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
+
+/* FULLSCREEN */
+#app.fullscreen{
+width:100vw;height:100vh;padding:0
+}
+#app.fullscreen #map{
+height:100vh;border-radius:0
+}
 </style>
 </head>
 
@@ -35,6 +49,7 @@ footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
 
 <button id="gpsBtn">📡 Enable GPS</button>
 <button id="followBtn">📍 Follow: ON</button>
+<button id="fsBtn">⛶ Fullscreen</button>
 
 <div id="gpsStatus">Waiting for GPS…</div>
 <div id="loc"></div>
@@ -54,27 +69,40 @@ footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
 <footer>© Manik Roy 2026</footer>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.js"></script>
+<script src="https://unpkg.com/leaflet-geometryutil"></script>
 
 <script>
-let map=L.map('map',{fullscreenControl:true})
-.setView([20,78],5);
+let map=L.map('map').setView([20,78],5);
 
-// --- MAP LAYERS ---
+// MAP LAYERS (FIXED TERRAIN)
 let layers={
-street:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
-sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
-terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'),
-hybrid:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}')
+street:L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+{maxZoom:19}
+),
+sat:L.tileLayer(
+'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+{maxZoom:19}
+),
+terrain:L.tileLayer(
+'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}',
+{maxZoom:18}
+),
+hybrid:L.tileLayer(
+'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+{maxZoom:19}
+)
 };
+
 layers.street.addTo(map);
 
-// --- VARIABLES ---
-let userMarker,watchId,follow=true;
+// VARIABLES
+let userMarker,watchId;
+let follow=true;
 let markers=[],line;
-let polyPoints=[],poly,linePoly;
+let polyPoints=[],poly;
 
-// --- MAP STYLE SWITCH ---
+// MAP STYLE SWITCH
 mapStyle.onchange=()=>{
 map.eachLayer(l=>map.removeLayer(l));
 layers[mapStyle.value].addTo(map);
@@ -83,7 +111,7 @@ if(line) line.addTo(map);
 if(poly) poly.addTo(map);
 };
 
-// --- FOLLOW LOGIC ---
+// FOLLOW CONTROL
 followBtn.onclick=()=>{
 follow=!follow;
 followBtn.innerText="📍 Follow: "+(follow?"ON":"OFF");
@@ -93,7 +121,7 @@ follow=false;
 followBtn.innerText="📍 Follow: OFF";
 });
 
-// --- GPS ---
+// GPS
 gpsBtn.onclick=startGPS;
 
 function startGPS(){
@@ -122,7 +150,41 @@ gpsBtn.style.display="block";
 },{enableHighAccuracy:true});
 }
 
-// --- MARKERS + DISTANCE ---
+// FULLSCREEN FIX
+fsBtn.onclick=()=>{
+if(!document.fullscreenElement){
+
+if(app.requestFullscreen){
+app.requestFullscreen();
+}
+else if(app.webkitRequestFullscreen){
+app.webkitRequestFullscreen();
+}
+else if(app.msRequestFullscreen){
+app.msRequestFullscreen();
+}
+
+app.classList.add("fullscreen");
+fsBtn.innerText="❎ Exit Fullscreen";
+
+}else{
+
+if(document.exitFullscreen){
+document.exitFullscreen();
+}
+else if(document.webkitExitFullscreen){
+document.webkitExitFullscreen();
+}
+else if(document.msExitFullscreen){
+document.msExitFullscreen();
+}
+
+app.classList.remove("fullscreen");
+fsBtn.innerText="⛶ Fullscreen";
+}
+};
+
+// MARKERS + DISTANCE
 addMarkerBtn.onclick=()=>{
 let m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
 m.on('drag',calcDist);
@@ -147,7 +209,7 @@ distance.innerText=`📏 Distance: ${(d/1000).toFixed(2)} km`;
 }else distance.innerText="";
 }
 
-// --- AREA MEASUREMENT ---
+// AREA MEASUREMENT
 startPoly.onclick=()=>{
 map.once('click',e=>{
 polyPoints.push(e.latlng);
