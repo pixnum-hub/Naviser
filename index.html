@@ -156,24 +156,50 @@ updateNav(c.latitude,c.longitude);
 
 // --- FULLSCREEN ---
 const floatFS=document.getElementById("floatFS");
-floatFS.onclick=()=>{
+floatFS.onclick=toggleFullscreen;
+
+function toggleFullscreen(){
 if(!document.fullscreenElement){
   app.requestFullscreen({navigationUI:"hide"}).catch(()=>{});
   app.classList.add("fullscreen"); floatFS.innerText="❎";
-}else{document.exitFullscreen(); app.classList.remove("fullscreen"); floatFS.innerText="⛶";}
+}else{exitFullscreen();}
 }
 
-// --- AUTO FADE BUTTON ---
-let hideTimeout;
-function autoFadeFS(){
-  floatFS.style.opacity="1"; document.getElementById('northArrow').style.opacity="1";
-  clearTimeout(hideTimeout);
-  hideTimeout=setTimeout(()=>{
-    floatFS.style.opacity="0.5"; document.getElementById('northArrow').style.opacity="0.5";
-  },3000);
+function exitFullscreen(){
+  if(document.fullscreenElement){
+    document.exitFullscreen().then(()=>app.classList.remove("fullscreen"));
+    floatFS.innerText="⛶";
+  }
 }
-document.addEventListener("mousemove", autoFadeFS);
-document.addEventListener("touchstart", autoFadeFS);
+
+// --- MOBILE FRIENDLY EXIT ---
+let startY=null;
+map.getContainer().addEventListener('touchstart', e=>{
+  if(e.touches.length===1) startY=e.touches[0].clientY;
+  longPressTimer = setTimeout(exitFullscreen, 1000); // long press
+});
+map.getContainer().addEventListener('touchend', e=>{
+  if(startY){
+    let endY = e.changedTouches[0].clientY;
+    if(endY - startY > 100) exitFullscreen(); // swipe down
+    startY=null;
+  }
+  clearTimeout(longPressTimer);
+});
+
+// Keep floating button fully visible on mobile
+if(/Mobi|Android/i.test(navigator.userAgent)){
+  floatFS.style.opacity="1";
+}
+
+// --- AUTO FADE BUTTON (desktop only) ---
+if(!/Mobi|Android/i.test(navigator.userAgent)){
+  let hideTimeout;
+  function autoFadeFS(){ floatFS.style.opacity="1"; document.getElementById('northArrow').style.opacity="1";
+  clearTimeout(hideTimeout); hideTimeout=setTimeout(()=>{ floatFS.style.opacity="0.5"; document.getElementById('northArrow').style.opacity="0.5";},3000);}
+  document.addEventListener("mousemove", autoFadeFS);
+  document.addEventListener("touchstart", autoFadeFS);
+}
 
 // --- COMPASS ---
 if(window.DeviceOrientationEvent){
