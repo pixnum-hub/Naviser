@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Naviser Offline</title>
+<title>Naviser PWA</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1220">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
@@ -146,6 +148,7 @@ layers.street.addTo(map);
 let userMarker,watchId,follow=true,markers=[],line;
 let polyPoints=[],poly;
 let waypoints=[],navActive=false,currentWP=0;
+let headingAngle=0;
 
 // --- MAP SWITCH ---
 mapStyle.onchange=()=>{
@@ -187,13 +190,23 @@ function autoFadeFS(){ floatFS.style.opacity="1"; document.getElementById('north
 clearTimeout(hideTimeout); hideTimeout=setTimeout(()=>{floatFS.style.opacity="0.5"; document.getElementById('northArrow').style.opacity="0.5";},3000);}
 document.addEventListener("mousemove",autoFadeFS);document.addEventListener("touchstart",autoFadeFS);
 
-// --- COMPASS ---
-let headingAngle=0;
+// --- COMPASS (Device OR Offline) ---
 if(window.DeviceOrientationEvent){
 window.addEventListener('deviceorientation', e=>{
-if(e.alpha!=null){headingAngle = 360-e.alpha; document.getElementById('northArrow').style.transform=`rotate(${headingAngle}deg)`; document.getElementById('heading').innerText=`Heading: ${Math.round(headingAngle)}°`; }
+if(e.alpha!=null){headingAngle = 360-e.alpha; }
 });
 }
+function getDeclination(lat, lon){return 0.065*lon-0.0003*lat;}
+function updateOfflineCompass(){
+if(!userMarker) return;
+let lat=userMarker.getLatLng().lat;
+let lon=userMarker.getLatLng().lng;
+let decl=getDeclination(lat, lon);
+let trueHeading=(headingAngle+decl+360)%360;
+document.getElementById('northArrow').style.transform=`rotate(${trueHeading}deg)`;
+document.getElementById('heading').innerText=`Heading: ${Math.round(trueHeading)}°`;
+}
+setInterval(updateOfflineCompass, 500);
 
 // --- MARKERS & POLYGON ---
 addMarkerBtn.onclick=()=>{ let m=L.marker(map.getCenter(),{draggable:true}).addTo(map); m.on('drag',updateMetrics); markers.push(m); updateMetrics();}
@@ -237,7 +250,7 @@ searchResults.innerHTML=''; data.slice(0,5).forEach(loc=>{ let div=document.crea
 });
 });
 
-// --- OPTIMIZED DOWNLOAD AREA ---
+// --- DOWNLOAD AREA ---
 let downloadAbort = false;
 downloadAreaBtn.onclick = async () => {
 if (!map.getBounds()) return alert('Zoom/pan to area!');
@@ -276,9 +289,12 @@ await new Promise(r=>setTimeout(r,50));
 progressDiv.innerText=downloadAbort?'Download aborted!':'Download complete!';
 setTimeout(()=>document.body.removeChild(progressDiv),2000);
 }
-
-// --- CANCEL DOWNLOAD ---
 cancelDownloadBtn.onclick=()=>{downloadAbort=true; alert('Download canceled');}
+
+// --- REGISTER SERVICE WORKER ---
+if('serviceWorker' in navigator){
+navigator.serviceWorker.register('sw.js').then(()=>console.log('SW registered'));
+}
 </script>
 </body>
 </html>
