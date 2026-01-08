@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Naviser Lite</title>
+<title>Naviser GPS</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
@@ -46,7 +46,7 @@ button {
 button:active { transform:scale(.97); }
 #distance { margin-top:5px; font-weight:bold; }
 footer { text-align:center; font-size:11px; opacity:.6; margin-top:10px; }
-#enableGPSBtn { display:none; margin-top:5px; background:#2563eb; }
+#enableGPSBtn { display:block; margin-top:5px; background:#2563eb; }
 </style>
 </head>
 <body>
@@ -55,8 +55,7 @@ footer { text-align:center; font-size:11px; opacity:.6; margin-top:10px; }
   <div id="map"></div>
 
   <div class="panel">
-    <button id="gpsBtn">📡 Start GPS</button>
-    <button id="enableGPSBtn">✅ Enable GPS</button>
+    <button id="enableGPSBtn">📡 Enable GPS</button>
     <div id="gpsStatus">Waiting for GPS…</div>
     <div id="loc"></div>
     <div id="distance"></div>
@@ -75,20 +74,22 @@ let map = L.map('map').setView([20,78],5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 // --- Variables ---
-let userMarker, lastPos=null, markers=[], line=null;
-const gpsBtn = document.getElementById('gpsBtn');
+let userMarker, markers=[], line=null;
 const enableGPSBtn = document.getElementById('enableGPSBtn');
 const gpsStatus = document.getElementById('gpsStatus');
 const loc = document.getElementById('loc');
 const distanceEl = document.getElementById('distance');
 let watchId = null;
 
-// --- GPS Functions ---
+// --- GPS Function ---
 function startGPS(){
-  if(!navigator.geolocation){ gpsStatus.innerText="❌ GPS not supported"; return; }
+  if(!navigator.geolocation){
+    gpsStatus.innerText="❌ GPS not supported";
+    return;
+  }
   gpsStatus.innerText="📡 Acquiring GPS…";
-  enableGPSBtn.style.display = "none";
 
+  // iOS requires gesture -> button click
   if(watchId) navigator.geolocation.clearWatch(watchId);
 
   watchId = navigator.geolocation.watchPosition(pos=>{
@@ -101,23 +102,21 @@ function startGPS(){
       userMarker.setLatLng([c.latitude,c.longitude]);
       map.panTo([c.latitude,c.longitude], {animate:true, duration:0.5});
     }
-    loc.innerText=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)} ±${Math.round(c.accuracy)}m`;
-    lastPos = {lat:c.latitude, lng:c.longitude};
+    loc.innerText = `📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)} ±${Math.round(c.accuracy)}m`;
   }, err=>{
-    if(err.code === 1){ // Permission denied
-      gpsStatus.innerText="❌ GPS Denied by user";
+    if(err.code === 1){
+      gpsStatus.innerText = "❌ GPS Denied by user. Please enable location.";
       enableGPSBtn.style.display = "block";
     } else {
-      gpsStatus.innerText="❌ GPS Error: "+err.message;
+      gpsStatus.innerText = "❌ GPS Error: "+err.message;
       if(err.code===3) setTimeout(startGPS,5000);
     }
   }, {enableHighAccuracy:true, timeout:20000, maximumAge:0});
 }
 
 // --- Buttons ---
-gpsBtn.onclick = startGPS;
 enableGPSBtn.onclick = () => {
-  gpsStatus.innerText="📡 Requesting GPS permission...";
+  enableGPSBtn.style.display = "none";
   startGPS();
 };
 
