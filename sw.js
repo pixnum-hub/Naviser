@@ -1,45 +1,25 @@
-const CACHE_NAME = "naviser-v1";
-
-const ASSETS = [
-  "./",
+const CACHE_NAME = "naviser-cache-v1";
+const urlsToCache = [
   "./index.html",
   "./manifest.json",
   "./sw.js",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
   "https://unpkg.com/leaflet/dist/leaflet.css",
-  "https://unpkg.com/leaflet/dist/leaflet.js"
+  "https://unpkg.com/leaflet/dist/leaflet.js",
+  "https://unpkg.com/leaflet-geometryutil"
 ];
 
-/* INSTALL */
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS);
-    })
-  );
-  self.skipWaiting();
-});
+self.addEventListener("install", e => e.waitUntil(
+  caches.open(CACHE_NAME).then(cache=>cache.addAll(urlsToCache))
+));
 
-/* ACTIVATE */
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.map(key => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      )
-    )
-  );
-  self.clients.claim();
-});
+self.addEventListener("activate", e => e.waitUntil(
+  caches.keys().then(keys=>Promise.all(
+    keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k))
+  ))
+));
 
-/* FETCH */
-self.addEventListener("fetch", event => {
-  event.respondWith(
-    caches.match(event.request).then(res => {
-      return res || fetch(event.request);
-    })
-  );
-});
+self.addEventListener("fetch", e => e.respondWith(
+  caches.match(e.request).then(r=>r||fetch(e.request))
+));
