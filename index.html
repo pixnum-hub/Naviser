@@ -78,17 +78,31 @@ footer{
   padding:6px 14px;
   border-radius:20px;
   display:none;
+  z-index:9000;
 }
 
-/* Fullscreen */
+/* ===== FULLSCREEN MODE (FIXED) ===== */
 :fullscreen #map{
-  height:100vh!important;
-  border-radius:0!important;
+  height:100vh !important;
+  width:100vw !important;
+  border-radius:0 !important;
 }
+
+/* Hide non-essential UI */
 :fullscreen #toolbar,
-:fullscreen #infoBox,
 :fullscreen footer{
   display:none;
+}
+
+/* KEEP geolocation visible */
+:fullscreen #infoBox{
+  position:fixed;
+  top:10px;
+  left:10px;
+  right:10px;
+  z-index:6000;
+  font-size:13px;
+  background:rgba(0,0,0,0.35);
 }
 </style>
 </head>
@@ -103,17 +117,17 @@ footer{
 <div id="map"></div>
 
 <div id="infoBox" class="panel">
-<div id="locInfo">Waiting for GPS…</div>
-<div id="distInfo">Distance: 0 km</div>
+  <div id="locInfo">Waiting for GPS…</div>
+  <div id="distInfo">Distance: 0 km</div>
 </div>
 
 <div id="toolbar" class="panel">
-<button onclick="addMarker()">➕ Add Marker</button>
-<button onclick="removeMarker()">➖ Remove Marker</button>
-<button onclick="toggleUnit()">📏 KM / Mile</button>
+  <button onclick="addMarker()">➕ Add Marker</button>
+  <button onclick="removeMarker()">➖ Remove Marker</button>
+  <button onclick="toggleUnit()">📏 KM / Mile</button>
 </div>
 
-<footer>© Manik Roy 2025. All Rights Reserved.</footer>
+<footer>© Mamik Roy 2025. All Rights Reserved.</footer>
 </div>
 
 <div id="offline">Offline Mode</div>
@@ -122,7 +136,7 @@ footer{
 <script>
 let map,userMarker,markers=[],line,km=true;
 
-/* Maps */
+/* MAPS */
 const maps={
  Standard:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
  Satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
@@ -134,7 +148,7 @@ const maps={
 map=L.map('map',{center:[20,78],zoom:5,layers:[maps.Standard]});
 L.control.layers(maps).addTo(map);
 
-/* Geolocation */
+/* GEOLOCATION */
 navigator.geolocation.watchPosition(p=>{
  const c=p.coords;
  if(!userMarker){
@@ -142,10 +156,13 @@ navigator.geolocation.watchPosition(p=>{
   map.setView([c.latitude,c.longitude],15);
  }else userMarker.setLatLng([c.latitude,c.longitude]);
  locInfo.innerHTML=
- `Lat: ${c.latitude.toFixed(5)}<br>Lng: ${c.longitude.toFixed(5)}<br>Accuracy: ${c.accuracy} m<br>Altitude: ${c.altitude ?? 'N/A'}`;
+ `Lat: ${c.latitude.toFixed(5)}<br>
+  Lng: ${c.longitude.toFixed(5)}<br>
+  Accuracy: ${c.accuracy} m<br>
+  Altitude: ${c.altitude ?? 'N/A'}`;
 });
 
-/* Markers */
+/* MARKERS & DISTANCE */
 function addMarker(){
  const c=map.getCenter();
  const m=L.marker(c,{draggable:true}).addTo(map);
@@ -163,7 +180,10 @@ function removeMarker(){
 }
 function calcDistance(){
  if(line) map.removeLayer(line);
- if(markers.length<2){distInfo.innerText='Distance: 0';return;}
+ if(markers.length<2){
+  distInfo.innerText='Distance: 0';
+  return;
+ }
  line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
  let d=0;
  for(let i=1;i<markers.length;i++)
@@ -172,7 +192,7 @@ function calcDistance(){
 }
 function toggleUnit(){km=!km;calcDistance();}
 
-/* IndexedDB */
+/* INDEXED DB */
 let db;
 indexedDB.open("NaviserDB",1).onupgradeneeded=e=>{
  e.target.result.createObjectStore("m",{autoIncrement:true});
@@ -196,13 +216,13 @@ function saveMarkers(){
  markers.forEach(m=>s.add(m.getLatLng()));
 }
 
-/* Theme */
+/* THEME */
 themeToggle.onclick=()=>{
  document.body.classList.toggle('dark');
  themeToggle.textContent=themeToggle.textContent==='🌙'?'☀️':'🌙';
 };
 
-/* Fullscreen */
+/* FULLSCREEN */
 fullscreenToggle.onclick=()=>{
  if(!document.fullscreenElement)
   document.documentElement.requestFullscreen();
@@ -210,13 +230,13 @@ fullscreenToggle.onclick=()=>{
 };
 document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
 
-/* Offline */
+/* OFFLINE */
 function net(){offline.style.display=navigator.onLine?'none':'block';}
 window.addEventListener('online',net);
 window.addEventListener('offline',net);
 net();
 
-/* PWA Install */
+/* PWA INSTALL */
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{
  e.preventDefault();
@@ -230,11 +250,9 @@ installBtn.onclick=async()=>{
  installBtn.style.display='none';
 };
 
-/* SW */
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+/* SERVICE WORKER */
+if('serviceWorker' in navigator)
+ navigator.serviceWorker.register('sw.js');
 </script>
 </body>
 </html>
-
-
-
