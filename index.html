@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Naviser Pro</title>
+<title>Naviser Ultimate</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -12,9 +12,11 @@ body{margin:0;background:#0b1220;color:#fff;font-family:system-ui}
 #app{max-width:480px;margin:auto;padding:8px}
 #map{height:60vh;border-radius:16px}
 
-.panel{background:rgba(255,255,255,.1);
+.panel{
+background:rgba(255,255,255,.1);
 backdrop-filter:blur(10px);
-border-radius:14px;padding:8px;margin-top:6px;font-size:13px}
+border-radius:14px;padding:8px;margin-top:6px;font-size:13px
+}
 
 button,select{
 width:100%;margin-top:4px;padding:8px;
@@ -31,15 +33,33 @@ width:100vw;height:100vh;padding:0
 #app.fullscreen #map{
 height:100vh;border-radius:0
 }
+
+/* NORTH OVERLAY */
+#northArrow{
+position:fixed;
+top:14px;left:14px;
+width:42px;height:42px;
+border-radius:50%;
+background:#1e293b;
+display:flex;
+align-items:center;
+justify-content:center;
+font-weight:bold;
+z-index:9999;
+}
 </style>
 </head>
 
 <body>
+
+<div id="northArrow">N</div>
+
 <div id="app">
 
 <div id="map"></div>
 
 <div class="panel">
+
 <select id="mapStyle">
 <option value="street">Street</option>
 <option value="sat">Satellite</option>
@@ -56,14 +76,30 @@ height:100vh;border-radius:0
 <div id="speed"></div>
 <div id="heading"></div>
 
+<button id="calBtn">🧭 Calibrate Compass</button>
+<div id="calMsg"></div>
+
 <button id="addMarkerBtn">➕ Add Marker</button>
 <button id="removeMarkerBtn">➖ Remove Marker</button>
+<button id="dirBtn">🎯 Direction to Marker</button>
+<div id="dirInfo"></div>
 
 <button id="startPoly">📐 Start Area</button>
 <button id="clearPoly">❌ Clear Area</button>
 
 <div id="distance"></div>
 <div id="area"></div>
+
+<hr>
+
+<button id="addWpBtn">📍 Add Waypoint</button>
+<button id="clearWpBtn">❌ Clear Waypoints</button>
+<button id="navBtn">🧭 Start Navigation</button>
+
+<div id="navArrow" style="font-size:30px;text-align:center"></div>
+<div id="remainDist"></div>
+<div id="wpInfo"></div>
+
 </div>
 
 <footer>© Manik Roy 2026</footer>
@@ -72,9 +108,9 @@ height:100vh;border-radius:0
 <script src="https://unpkg.com/leaflet-geometryutil"></script>
 
 <script>
+/* MAP */
 let map=L.map('map').setView([20,78],5);
 
-// MAP LAYERS (FIXED TERRAIN)
 let layers={
 street:L.tileLayer(
 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -96,13 +132,17 @@ hybrid:L.tileLayer(
 
 layers.street.addTo(map);
 
-// VARIABLES
+/* VARIABLES */
 let userMarker,watchId;
 let follow=true;
 let markers=[],line;
 let polyPoints=[],poly;
+let targetMarker=null;
 
-// MAP STYLE SWITCH
+/* WAYPOINT */
+let waypoints=[],navActive=false,currentWP=0;
+
+/* MAP SWITCH */
 mapStyle.onchange=()=>{
 map.eachLayer(l=>map.removeLayer(l));
 layers[mapStyle.value].addTo(map);
@@ -111,7 +151,7 @@ if(line) line.addTo(map);
 if(poly) poly.addTo(map);
 };
 
-// FOLLOW CONTROL
+/* FOLLOW */
 followBtn.onclick=()=>{
 follow=!follow;
 followBtn.innerText="📍 Follow: "+(follow?"ON":"OFF");
@@ -121,7 +161,7 @@ follow=false;
 followBtn.innerText="📍 Follow: OFF";
 });
 
-// GPS
+/* GPS */
 gpsBtn.onclick=startGPS;
 
 function startGPS(){
@@ -142,7 +182,9 @@ if(follow) map.panTo([c.latitude,c.longitude]);
 
 loc.innerText=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}`;
 speed.innerText=`🚀 Speed: ${(c.speed?c.speed*3.6:0).toFixed(1)} km/h`;
-heading.innerText=`🧭 Heading: ${c.heading?c.heading.toFixed(0):"N/A"}°`;
+
+/* NAV UPDATE */
+if(navActive) navUpdate(c.latitude,c.longitude);
 
 },err=>{
 gpsStatus.innerText="❌ GPS Denied";
@@ -150,41 +192,20 @@ gpsBtn.style.display="block";
 },{enableHighAccuracy:true});
 }
 
-// FULLSCREEN FIX
+/* FULLSCREEN */
 fsBtn.onclick=()=>{
 if(!document.fullscreenElement){
-
-if(app.requestFullscreen){
 app.requestFullscreen();
-}
-else if(app.webkitRequestFullscreen){
-app.webkitRequestFullscreen();
-}
-else if(app.msRequestFullscreen){
-app.msRequestFullscreen();
-}
-
 app.classList.add("fullscreen");
 fsBtn.innerText="❎ Exit Fullscreen";
-
 }else{
-
-if(document.exitFullscreen){
 document.exitFullscreen();
-}
-else if(document.webkitExitFullscreen){
-document.webkitExitFullscreen();
-}
-else if(document.msExitFullscreen){
-document.msExitFullscreen();
-}
-
 app.classList.remove("fullscreen");
 fsBtn.innerText="⛶ Fullscreen";
 }
 };
 
-// MARKERS + DISTANCE
+/* MARKERS */
 addMarkerBtn.onclick=()=>{
 let m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
 m.on('drag',calcDist);
@@ -198,6 +219,7 @@ calcDist();
 }
 }
 
+/* DISTANCE */
 function calcDist(){
 if(line) map.removeLayer(line);
 if(markers.length>1){
@@ -209,7 +231,7 @@ distance.innerText=`📏 Distance: ${(d/1000).toFixed(2)} km`;
 }else distance.innerText="";
 }
 
-// AREA MEASUREMENT
+/* AREA */
 startPoly.onclick=()=>{
 map.once('click',e=>{
 polyPoints.push(e.latlng);
@@ -222,16 +244,158 @@ polyPoints=[];
 if(poly) map.removeLayer(poly);
 area.innerText="";
 }
-
 function drawPoly(){
 if(poly) map.removeLayer(poly);
 poly=L.polygon(polyPoints).addTo(map);
-
 if(polyPoints.length>2){
 let a=L.GeometryUtil.geodesicArea(polyPoints);
 area.innerText=`📐 Area: ${(a/1000000).toFixed(3)} km²`;
 }
 }
+
+/* COMPASS */
+let offset=0,lastHeading=null;
+let declination=2; // India approx
+
+function initCompass(){
+if(window.DeviceOrientationEvent){
+if(typeof DeviceOrientationEvent.requestPermission==="function"){
+DeviceOrientationEvent.requestPermission().then(p=>{
+if(p==="granted") startCompass();
+});
+}else startCompass();
+}
+}
+function startCompass(){
+window.addEventListener("deviceorientationabsolute",handleCompass,true);
+window.addEventListener("deviceorientation",handleCompass,true);
+}
+
+function handleCompass(e){
+let raw;
+if(e.webkitCompassHeading){
+raw=e.webkitCompassHeading;
+}
+else if(e.absolute && e.alpha!=null){
+raw=360-e.alpha;
+}else return;
+
+raw=(raw+360)%360;
+
+let heading=(raw+offset+declination+360)%360;
+
+if(lastHeading!=null)
+heading=lastHeading+(heading-lastHeading)*0.15;
+
+lastHeading=heading;
+heading=Math.round(heading);
+
+headingEl.innerText=`🧭 Heading: ${heading}°`;
+}
+
+/* CALIBRATION */
+calBtn.onclick=()=>{
+calMsg.innerText="Rotate phone in figure 8 for 5 sec...";
+let samples=[];
+let temp=(e)=>{
+let h;
+if(e.webkitCompassHeading) h=e.webkitCompassHeading;
+else if(e.alpha!=null) h=360-e.alpha;
+if(h!=null) samples.push(h);
+};
+window.addEventListener("deviceorientation",temp,true);
+
+setTimeout(()=>{
+window.removeEventListener("deviceorientation",temp);
+let avg=samples.reduce((a,b)=>a+b,0)/samples.length;
+offset=360-avg;
+calMsg.innerText="✅ Calibration done";
+},5000);
+}
+
+/* BEARING */
+function bearing(lat1,lng1,lat2,lng2){
+let dLon=(lng2-lng1)*Math.PI/180;
+let y=Math.sin(dLon)*Math.cos(lat2*Math.PI/180);
+let x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-
+Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
+return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+/* TARGET DIRECTION */
+dirBtn.onclick=()=>{
+if(!markers.length){
+alert("Add marker first");
+return;
+}
+targetMarker=markers[markers.length-1];
+dirInfo.innerText="🎯 Target locked";
+}
+
+/* WAYPOINTS */
+addWpBtn.onclick=()=>{
+if(!userMarker){alert("Enable GPS");return;}
+waypoints.push(userMarker.getLatLng());
+wpInfo.innerText=`📍 Waypoints: ${waypoints.length}`;
+}
+
+clearWpBtn.onclick=()=>{
+waypoints=[];
+currentWP=0;
+navActive=false;
+wpInfo.innerText="";
+navArrow.innerText="";
+remainDist.innerText="";
+navBtn.innerText="🧭 Start Navigation";
+}
+
+/* NAV */
+navBtn.onclick=()=>{
+if(!waypoints.length){
+alert("Add waypoint");
+return;
+}
+navActive=!navActive;
+navBtn.innerText=navActive?"🛑 Stop":"🧭 Start Navigation";
+}
+
+/* TURN ARROW */
+function getTurn(diff){
+if(diff<20||diff>340) return "⬆️ Go Straight";
+if(diff<60) return "↗️ Slight Right";
+if(diff<120) return "➡️ Turn Right";
+if(diff<160) return "↘️ Sharp Right";
+if(diff<200) return "⬇️ U-Turn";
+if(diff<240) return "↙️ Sharp Left";
+if(diff<300) return "⬅️ Turn Left";
+return "↖️ Slight Left";
+}
+
+function navUpdate(lat,lng){
+let target=waypoints[currentWP];
+
+let b=bearing(lat,lng,target.lat,target.lng);
+
+let d=L.latLng(lat,lng).distanceTo(target);
+remainDist.innerText=
+`📏 Remaining: ${(d/1000).toFixed(2)} km`;
+
+let diff=(b-lastHeading+360)%360;
+navArrow.innerText=getTurn(diff);
+
+if(d<15){
+currentWP++;
+if(currentWP>=waypoints.length){
+navArrow.innerText="🏁 Destination reached";
+navActive=false;
+navBtn.innerText="🧭 Start Navigation";
+}else{
+wpInfo.innerText=`➡ Next waypoint ${currentWP+1}`;
+}
+}
+}
+
+initCompass();
 </script>
 </body>
 </html>
