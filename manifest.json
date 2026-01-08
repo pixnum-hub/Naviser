@@ -1,8 +1,8 @@
 {
   "name": "Naviser Ultimate",
   "short_name": "Naviser",
-  "description": "Professional GPS Navigation App with Compass, Waypoints, Area Measurement, and Map Search",
-  "start_url": "/index.html",
+  "description": "Professional GPS Navigation App",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0b1220",
   "theme_color": "#1e293b",
