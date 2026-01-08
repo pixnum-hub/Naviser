@@ -13,17 +13,26 @@ body{
   font-family:system-ui;
   background:#0f172a;
   color:#fff;
+  display:flex;
+  justify-content:center;
 }
+
+/* APP FRAME */
 #app{
+  width:100%;
   max-width:480px;
-  margin:auto;
   padding:10px;
   position:relative;
 }
+
+/* MAP */
 #map{
   height:55vh;
   border-radius:20px;
+  overflow:hidden;
 }
+
+/* UI */
 .panel{
   backdrop-filter:blur(14px);
   background:rgba(255,255,255,.15);
@@ -44,7 +53,7 @@ button{
   backdrop-filter:blur(14px);
   background:rgba(255,255,255,.15);
   color:white;
-  z-index:5000;
+  z-index:3000;
 }
 #themeToggle{top:10px;right:10px;}
 #fullscreenToggle{top:60px;right:10px;}
@@ -54,21 +63,23 @@ button{
   margin-top:10px;
   font-size:13px;
 }
+
 #toolbar{
   margin-top:10px;
   display:flex;
-  flex-wrap:wrap;
   gap:6px;
+  flex-wrap:wrap;
 }
 #toolbar button{flex:1 1 48%;}
 
 footer{
   text-align:center;
   font-size:12px;
-  margin-top:20px;
+  margin-top:16px;
   opacity:.6;
 }
 
+/* OFFLINE */
 #offline{
   position:fixed;
   bottom:10px;
@@ -81,33 +92,38 @@ footer{
   z-index:9000;
 }
 
-/* ===== FULLSCREEN MODE (FIXED) ===== */
-:fullscreen #map{
-  height:100vh !important;
-  width:100vw !important;
-  border-radius:0 !important;
+/* ===== FULLSCREEN (CORRECTED) ===== */
+#app:fullscreen{
+  max-width:none;
+  width:100vw;
+  height:100vh;
+  padding:0;
 }
 
-/* Hide non-essential UI */
-:fullscreen #toolbar,
-:fullscreen footer{
+#app:fullscreen #map{
+  height:100%;
+  width:100%;
+  border-radius:0;
+}
+
+#app:fullscreen #toolbar,
+#app:fullscreen footer{
   display:none;
 }
 
-/* KEEP geolocation visible */
-:fullscreen #infoBox{
-  position:fixed;
-  top:10px;
+#app:fullscreen #infoBox{
+  position:absolute;
+  bottom:10px;
   left:10px;
   right:10px;
-  z-index:6000;
-  font-size:13px;
+  z-index:4000;
   background:rgba(0,0,0,0.35);
 }
 </style>
 </head>
 
 <body>
+
 <div id="app">
 
 <button id="themeToggle" class="round">🌙</button>
@@ -127,7 +143,7 @@ footer{
   <button onclick="toggleUnit()">📏 KM / Mile</button>
 </div>
 
-<footer>© Mamik Roy 2025. All Rights Reserved.</footer>
+<footer>© Manik Roy 2025. All Rights Reserved.</footer>
 </div>
 
 <div id="offline">Offline Mode</div>
@@ -136,17 +152,9 @@ footer{
 <script>
 let map,userMarker,markers=[],line,km=true;
 
-/* MAPS */
-const maps={
- Standard:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
- Satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
- Terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17}),
- Dark:L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}),
- Minimal:L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19})
-};
-
-map=L.map('map',{center:[20,78],zoom:5,layers:[maps.Standard]});
-L.control.layers(maps).addTo(map);
+/* MAP */
+map=L.map('map',{center:[20,78],zoom:5});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
 /* GEOLOCATION */
 navigator.geolocation.watchPosition(p=>{
@@ -155,6 +163,7 @@ navigator.geolocation.watchPosition(p=>{
   userMarker=L.marker([c.latitude,c.longitude]).addTo(map);
   map.setView([c.latitude,c.longitude],15);
  }else userMarker.setLatLng([c.latitude,c.longitude]);
+
  locInfo.innerHTML=
  `Lat: ${c.latitude.toFixed(5)}<br>
   Lng: ${c.longitude.toFixed(5)}<br>
@@ -162,28 +171,23 @@ navigator.geolocation.watchPosition(p=>{
   Altitude: ${c.altitude ?? 'N/A'}`;
 });
 
-/* MARKERS & DISTANCE */
+/* MARKERS */
 function addMarker(){
  const c=map.getCenter();
  const m=L.marker(c,{draggable:true}).addTo(map);
  m.on('drag',calcDistance);
  markers.push(m);
- saveMarkers();
  calcDistance();
 }
 function removeMarker(){
  if(markers.length){
   map.removeLayer(markers.pop());
-  saveMarkers();
   calcDistance();
  }
 }
 function calcDistance(){
  if(line) map.removeLayer(line);
- if(markers.length<2){
-  distInfo.innerText='Distance: 0';
-  return;
- }
+ if(markers.length<2){distInfo.innerText='Distance: 0';return;}
  line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
  let d=0;
  for(let i=1;i<markers.length;i++)
@@ -192,40 +196,10 @@ function calcDistance(){
 }
 function toggleUnit(){km=!km;calcDistance();}
 
-/* INDEXED DB */
-let db;
-indexedDB.open("NaviserDB",1).onupgradeneeded=e=>{
- e.target.result.createObjectStore("m",{autoIncrement:true});
-};
-indexedDB.open("NaviserDB",1).onsuccess=e=>{
- db=e.target.result;
- db.transaction("m").objectStore("m").getAll().onsuccess=r=>{
-  r.target.result.forEach(p=>{
-   const m=L.marker([p.lat,p.lng],{draggable:true}).addTo(map);
-   m.on('drag',saveMarkers);
-   markers.push(m);
-  });
-  calcDistance();
- };
-};
-function saveMarkers(){
- if(!db) return;
- const tx=db.transaction("m","readwrite");
- const s=tx.objectStore("m");
- s.clear();
- markers.forEach(m=>s.add(m.getLatLng()));
-}
-
-/* THEME */
-themeToggle.onclick=()=>{
- document.body.classList.toggle('dark');
- themeToggle.textContent=themeToggle.textContent==='🌙'?'☀️':'🌙';
-};
-
-/* FULLSCREEN */
+/* FULLSCREEN (APP ONLY) */
 fullscreenToggle.onclick=()=>{
- if(!document.fullscreenElement)
-  document.documentElement.requestFullscreen();
+ const app=document.getElementById('app');
+ if(!document.fullscreenElement) app.requestFullscreen();
  else document.exitFullscreen();
 };
 document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
@@ -236,7 +210,7 @@ window.addEventListener('online',net);
 window.addEventListener('offline',net);
 net();
 
-/* PWA INSTALL */
+/* PWA */
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{
  e.preventDefault();
@@ -250,7 +224,6 @@ installBtn.onclick=async()=>{
  installBtn.style.display='none';
 };
 
-/* SERVICE WORKER */
 if('serviceWorker' in navigator)
  navigator.serviceWorker.register('sw.js');
 </script>
