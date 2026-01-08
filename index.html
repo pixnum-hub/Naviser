@@ -42,8 +42,9 @@ button {
   background:#1e293b;
   color:#fff;
   cursor:pointer;
+  margin:2px 0;
 }
-button:active { transform:scale(.97); margin-bottom:2px; }
+button:active { transform:scale(.97); }
 #distance { margin-top:5px; font-weight:bold; }
 footer { text-align:center; font-size:11px; opacity:.6; margin-top:10px; }
 #enableGPSBtn { display:block; margin-top:5px; background:#2563eb; }
@@ -100,13 +101,17 @@ function startGPS(){
     gpsStatus.innerText="✅ GPS Active";
     let c = pos.coords;
 
+    // Update or create user marker
     if(!userMarker){
       userMarker = L.marker([c.latitude,c.longitude]).addTo(map);
-      map.setView([c.latitude,c.longitude],16);
+      if(followUser) map.setView([c.latitude,c.longitude],16);
     } else {
       userMarker.setLatLng([c.latitude,c.longitude]);
+      // Pan only if followUser is ON
       if(followUser) map.panTo([c.latitude,c.longitude], {animate:true, duration:0.5});
     }
+
+    // Update GPS info
     loc.innerText = `📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)} ±${Math.round(c.accuracy)}m`;
 
   }, err=>{
@@ -129,7 +134,7 @@ followBtn.onclick = () => {
   followBtn.innerText = `📍 Follow Me: ${followUser ? 'ON':'OFF'}`;
 };
 
-// Disable follow automatically when user pans/zooms
+// --- Disable follow automatically on manual pan/zoom ---
 map.on('dragstart zoomstart', ()=>{
   followUser = false;
   followBtn.innerText = "📍 Follow Me: OFF";
