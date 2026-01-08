@@ -4,272 +4,197 @@
 <meta charset="UTF-8">
 <title>Naviser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-body{
-  margin:0;
-  font-family:system-ui;
-  background:#0f172a;
-  color:#fff;
-  display:flex;
-  justify-content:center;
-}
+body{margin:0;background:#0b1220;font-family:system-ui;color:#fff;display:flex;justify-content:center}
+#app{width:100%;max-width:480px;padding:10px;position:relative}
+#map{height:55vh;border-radius:18px;overflow:hidden}
+.panel{background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border-radius:14px;padding:10px;margin-top:8px}
+button{border:none;border-radius:12px;padding:8px;font-size:13px;background:#1e293b;color:#fff}
+button:active{transform:scale(.97)}
+#floating{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:8px;z-index:3000}
+.round{width:40px;height:40px;border-radius:50%}
 
-/* APP FRAME */
-#app{
-  width:100%;
-  max-width:480px;
-  padding:12px;
-  position:relative;
-}
+/* Compass */
+#compassWrap{display:flex;align-items:center;gap:10px}
+#compassRing{width:40px;height:40px;border-radius:50%;border:2px solid #94a3b8;position:relative}
+#needle{width:2px;height:18px;background:red;position:absolute;left:50%;top:2px;transform-origin:bottom}
 
-/* MAP */
-#map{
-  height:55vh;
-  border-radius:20px;
-  overflow:hidden;
-}
+/* Route list */
+.route{display:flex;justify-content:space-between;margin:4px 0;font-size:12px}
 
-/* GLASS PANEL */
-.panel{
-  backdrop-filter:blur(14px);
-  background:rgba(255,255,255,.15);
-  border-radius:16px;
-  padding:10px;
-}
-
-/* BUTTONS */
-button{
-  border:none;
-  border-radius:12px;
-  padding:8px;
-  font-size:14px;
-  cursor:pointer;
-  margin:2px 0;
-}
-
-/* FLOATING ROUND BUTTONS */
-.round{
-  position:absolute;
-  width:40px;
-  height:40px;
-  border-radius:50%;
-  backdrop-filter:blur(14px);
-  background:rgba(255,255,255,.18);
-  color:white;
-  z-index:3000;
-}
-#fullscreenToggle{top:10px;right:10px;}
-#installBtn{top:60px;right:10px;display:none;}
-#layersToggle{top:110px;right:10px;}
-
-/* INFO */
-#infoBox{
-  margin-top:10px;
-  font-size:13px;
-  line-height:1.4;
-}
-
-/* TOOLBAR */
-#toolbar{
-  margin-top:10px;
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-}
-#toolbar button{flex:1 1 48%;}
-
-/* LAYERS PANEL */
-#layersPanel{
-  display:none;
-  margin-top:10px;
-}
-
-/* FOOTER */
-footer{
-  text-align:center;
-  font-size:12px;
-  margin-top:18px;
-  opacity:.6;
-}
-
-/* OFFLINE */
-#offline{
-  position:fixed;
-  bottom:12px;
-  left:50%;
-  transform:translateX(-50%);
-  background:#dc2626;
-  padding:6px 14px;
-  border-radius:20px;
-  display:none;
-  z-index:9000;
-}
-
-/* FULLSCREEN FIX */
-#app:fullscreen{
-  max-width:none;
-  width:100vw;
-  height:100vh;
-  padding:0;
-}
-#app:fullscreen #map{
-  height:100%;
-  border-radius:0;
-}
-#app:fullscreen #toolbar,
-#app:fullscreen footer{
-  display:none;
-}
-#app:fullscreen #infoBox,
-#app:fullscreen #layersPanel{
-  position:absolute;
-  left:10px;
-  right:10px;
-  z-index:4000;
-}
-#app:fullscreen #infoBox{bottom:10px;}
-#app:fullscreen #layersPanel{top:60px;}
+/* Fullscreen */
+#app:fullscreen{padding:0}
+#app:fullscreen #map{height:100vh;border-radius:0}
+#app:fullscreen .hideFS{display:none}
 </style>
 </head>
 
 <body>
-
 <div id="app">
 
-<button id="fullscreenToggle" class="round">⛶</button>
-<button id="installBtn" class="round">⬇️</button>
-<button id="layersToggle" class="round">🗺️</button>
+<div id="floating">
+<button id="fsBtn" class="round">⛶</button>
+<button id="layerBtn" class="round">🗺️</button>
+</div>
 
 <div id="map"></div>
 
-<div id="layersPanel" class="panel">
-  <strong>Map Variations</strong><br>
-  <button onclick="setLayer('osm')">🗺️ Standard</button>
-  <button onclick="setLayer('sat')">🛰️ Satellite</button>
-  <button onclick="setLayer('terrain')">🌄 Terrain</button>
-  <button onclick="setLayer('topo')">🧭 Topographic</button>
-  <button onclick="setLayer('dark')">🌙 Dark Map</button>
+<div class="panel">
+<div id="loc">📍 Waiting for GPS…</div>
+<div id="speed">📡 Speed: 0 km/h</div>
+<div id="bearing">🧭 Bearing: 0°</div>
+
+<div id="compassWrap">
+<div id="compassRing"><div id="needle"></div></div>
+<div id="heading">Heading: 0°</div>
 </div>
 
-<div id="infoBox" class="panel">
-  <div id="locInfo">Waiting for GPS…</div>
-  <div id="distInfo">Distance: 0 km</div>
+<div id="distance">📏 Distance: 0 km</div>
+<div id="area">📐 Area: 0</div>
 </div>
 
-<div id="toolbar" class="panel">
-  <button onclick="addMarker()">➕ Add Marker</button>
-  <button onclick="removeMarker()">➖ Remove Marker</button>
-  <button onclick="toggleUnit()">📏 KM / Mile</button>
+<div class="panel hideFS">
+<button onclick="addMarker()">➕ Marker</button>
+<button onclick="removeMarker()">➖ Marker</button>
+<button onclick="toggleUnit()">↔ Units</button>
+<button onclick="saveRoute()">💾 Save Route</button>
+<button onclick="clearArea()">❌ Clear Area</button>
 </div>
 
-<footer>© Manik Roy 2025. All Rights Reserved.</footer>
+<div class="panel hideFS">
+<b>Saved Routes</b>
+<div id="routes"></div>
 </div>
 
-<div id="offline">Offline Mode</div>
+<footer class="hideFS" style="text-align:center;font-size:11px;opacity:.6">
+© Manik Roy 2025. All Rights Reserved.
+</footer>
+
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-geometryutil"></script>
 
 <script>
-let map,userMarker,markers=[],line,km=true,activeLayer;
+let map=L.map('map').setView([20,78],5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-/* MAP LAYERS (NO API KEY) */
-const layers={
- osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
- sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
- terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17}),
- topo:L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',{maxZoom:19}),
- dark:L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png',{maxZoom:19})
-};
+let userMarker,lastPos=null,markers=[],poly,line;
+let km=true,spdAvg=0;
 
-map=L.map('map',{center:[20,78],zoom:5,layers:[layers.osm]});
-activeLayer=layers.osm;
-
-/* LAYER SWITCH */
-function setLayer(name){
- map.removeLayer(activeLayer);
- activeLayer=layers[name];
- map.addLayer(activeLayer);
- layersPanel.style.display='none';
-}
-layersToggle.onclick=()=>{
- layersPanel.style.display=layersPanel.style.display==='none'?'block':'none';
-};
-
-/* GEOLOCATION */
+/* GPS */
 navigator.geolocation.watchPosition(p=>{
  const c=p.coords;
  if(!userMarker){
   userMarker=L.marker([c.latitude,c.longitude]).addTo(map);
   map.setView([c.latitude,c.longitude],15);
- }else userMarker.setLatLng([c.latitude,c.longitude]);
+ } else userMarker.setLatLng([c.latitude,c.longitude]);
 
- locInfo.innerHTML=
-  `Lat: ${c.latitude.toFixed(5)}<br>
-   Lng: ${c.longitude.toFixed(5)}<br>
-   Accuracy: ${c.accuracy} m<br>
-   Altitude: ${c.altitude ?? 'N/A'}`;
+ loc.innerHTML=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}`;
+
+ let spd=(c.speed||0)*3.6;
+ spdAvg=spdAvg*0.7+spd*0.3;
+ speed.innerText=`📡 Speed: ${spdAvg.toFixed(1)} ${km?'km/h':'mph'}`;
+
+ if(lastPos){
+  let b=bearingCalc(lastPos.lat,lastPos.lng,c.latitude,c.longitude);
+  bearing.innerText=`🧭 Bearing: ${Math.round(b)}°`;
+ }
+ lastPos={lat:c.latitude,lng:c.longitude};
 },{enableHighAccuracy:true});
 
-/* MARKERS */
+/* Compass */
+if(window.DeviceOrientationEvent){
+ window.addEventListener('deviceorientation',e=>{
+  if(e.alpha!=null){
+   let h=Math.round(360-e.alpha);
+   needle.style.transform=`rotate(${h}deg)`;
+   heading.innerText=`Heading: ${h}°`;
+  }
+ });
+}
+
+/* Markers */
 function addMarker(){
- const m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
- m.on('drag',calcDistance);
+ let m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
+ m.on('drag',updateMetrics);
  markers.push(m);
- calcDistance();
+ updateMetrics();
 }
 function removeMarker(){
  if(markers.length){
   map.removeLayer(markers.pop());
-  calcDistance();
+  updateMetrics();
  }
 }
 
-/* DISTANCE */
-function calcDistance(){
+/* Distance + Area */
+function updateMetrics(){
  if(line) map.removeLayer(line);
- if(markers.length<2){distInfo.innerText='Distance: 0';return;}
- line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
- let d=0;
- for(let i=1;i<markers.length;i++)
-  d+=markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
- distInfo.innerText=`Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mile'}`;
+ if(poly) map.removeLayer(poly);
+
+ if(markers.length>1){
+  line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
+  let d=0;
+  for(let i=1;i<markers.length;i++)
+   d+=markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
+  distance.innerText=`📏 Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mi'}`;
+ }
+
+ if(markers.length>2){
+  poly=L.polygon(markers.map(m=>m.getLatLng())).addTo(map);
+  let a=L.GeometryUtil.geodesicArea(poly.getLatLngs()[0]);
+  area.innerText=`📐 Area: ${(a/1e6).toFixed(3)} km² | ${(a*0.000247).toFixed(2)} acres`;
+ }
 }
-function toggleUnit(){km=!km;calcDistance();}
 
-/* FULLSCREEN */
-fullscreenToggle.onclick=()=>{
- const app=document.getElementById('app');
- !document.fullscreenElement?app.requestFullscreen():document.exitFullscreen();
-};
-document.addEventListener('fullscreenchange',()=>setTimeout(()=>map.invalidateSize(),300));
+/* Save routes */
+function saveRoute(){
+ let name=prompt('Route name?');
+ if(!name||markers.length<2) return;
+ let data=JSON.parse(localStorage.getItem('routes')||'{}');
+ data[name]=markers.map(m=>m.getLatLng());
+ localStorage.setItem('routes',JSON.stringify(data));
+ loadRoutes();
+}
+function loadRoutes(){
+ routes.innerHTML='';
+ let data=JSON.parse(localStorage.getItem('routes')||'{}');
+ for(let k in data){
+  let div=document.createElement('div');
+  div.className='route';
+  div.innerHTML=`${k}<span onclick="loadRoute('${k}')">▶</span>`;
+  routes.appendChild(div);
+ }
+}
+function loadRoute(n){
+ markers.forEach(m=>map.removeLayer(m));
+ markers=[];
+ JSON.parse(localStorage.getItem('routes'))[n].forEach(p=>{
+  let m=L.marker(p,{draggable:true}).addTo(map);
+  m.on('drag',updateMetrics);
+  markers.push(m);
+ });
+ updateMetrics();
+}
+loadRoutes();
 
-/* OFFLINE */
-function net(){offline.style.display=navigator.onLine?'none':'block';}
-window.addEventListener('online',net);
-window.addEventListener('offline',net);
-net();
+/* Utils */
+function toggleUnit(){km=!km;updateMetrics();}
+function clearArea(){if(poly)map.removeLayer(poly);area.innerText='📐 Area: 0';}
+function bearingCalc(lat1,lng1,lat2,lng2){
+ let dLon=(lng2-lng1)*Math.PI/180;
+ let y=Math.sin(dLon)*Math.cos(lat2*Math.PI/180);
+ let x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-
+        Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
+ return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
 
-/* PWA */
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt',e=>{
- e.preventDefault();
- deferredPrompt=e;
- installBtn.style.display='block';
-});
-installBtn.onclick=async()=>{
- deferredPrompt.prompt();
- await deferredPrompt.userChoice;
- deferredPrompt=null;
- installBtn.style.display='none';
-};
-
-if('serviceWorker' in navigator)
- navigator.serviceWorker.register('sw.js');
+/* Fullscreen */
+fsBtn.onclick=()=>!document.fullscreenElement?app.requestFullscreen():document.exitFullscreen();
 </script>
-
 </body>
 </html>
