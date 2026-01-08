@@ -4,32 +4,40 @@
 <meta charset="UTF-8">
 <title>Naviser Ultimate</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0b1220">
+
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <style>
-body{margin:0;background:#0b1220;color:#fff;font-family:system-ui}
-#app{max-width:480px;margin:auto;padding:8px;display:flex;flex-direction:column; height:100vh;}
-#map{height:60vh; min-height:300px;border-radius:16px;flex:1}
-#app.fullscreen #map{height:calc(100vh - 300px); min-height:300px; border-radius:0;}
+body, html{
+  margin:0; padding:0; width:100%; height:100%; background:#0b1220; color:#fff; font-family:system-ui; overflow:hidden;
+}
+#app{
+  max-width:480px; margin:auto; width:100%; height:100%; display:flex; flex-direction:column; position:relative;
+}
+#map{height:60vh; border-radius:16px; flex-shrink:0;}
 .panel{
-background:rgba(255,255,255,.1);
-backdrop-filter:blur(10px);
-border-radius:14px;padding:8px;margin-top:6px;font-size:13px
+  background:rgba(255,255,255,.1); backdrop-filter:blur(10px); border-radius:14px; padding:8px; margin-top:6px; font-size:13px; overflow:auto; max-height:calc(40vh - 16px);
 }
-button,select,input{
-width:100%;margin-top:4px;padding:8px;
-border-radius:10px;border:none;
-background:#1e293b;color:#fff
-}
-footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
+button, select, input{width:100%; margin-top:4px; padding:8px; border-radius:10px; border:none; background:#1e293b; color:#fff;}
+footer{text-align:center; font-size:11px; opacity:.6; margin-top:8px;}
+
+/* FULLSCREEN */
+#app.fullscreen{width:100vw; height:100vh; padding:0;}
+#app.fullscreen #map{height:100%; border-radius:0;}
 
 /* NORTH ARROW */
-#northArrow{position:fixed;top:14px;left:14px;width:42px;height:42px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:bold;z-index:99999;pointer-events:none;transition:opacity 0.3s}
+#northArrow{
+  position:fixed; top:14px; left:14px; width:42px; height:42px; border-radius:50%;
+  background:#1e293b; display:flex; align-items:center; justify-content:center; font-weight:bold; z-index:99999; pointer-events:none; transition:opacity 0.3s;
+}
 
 /* FLOATING FULLSCREEN BUTTON */
-#floatFS{position:fixed;bottom:20px;right:16px;width:52px;height:52px;border-radius:50%;background:#1e293b;border:none;color:#fff;font-size:20px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.5);opacity:0.5;transition: opacity 0.3s;cursor:pointer;}
-#floatFS:hover,#floatFS:active{opacity:1}
+#floatFS{
+  position:fixed; bottom:20px; right:16px; width:52px; height:52px; border-radius:50%;
+  background:#1e293b; border:none; color:#fff; font-size:20px; z-index:99999; box-shadow:0 4px 12px rgba(0,0,0,.5);
+  opacity:0.5; transition:opacity 0.3s; cursor:pointer;
+}
+#floatFS:hover,#floatFS:active{opacity:1;}
 
 /* SEARCH BAR */
 #searchInput{background:#1e293b;color:#fff;font-size:14px;margin-bottom:4px;}
@@ -65,9 +73,6 @@ footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
 <div id="speed"></div>
 <div id="heading"></div>
 
-<button id="calBtn">🧭 Calibrate Compass</button>
-<div id="calMsg"></div>
-
 <button id="addMarkerBtn">➕ Add Marker</button>
 <button id="removeMarkerBtn">➖ Remove Marker</button>
 <button id="dirBtn">🎯 Direction to Marker</button>
@@ -95,42 +100,39 @@ footer{text-align:center;font-size:11px;opacity:.6;margin-top:8px}
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-geometryutil"></script>
-
 <script>
-// --- MAP ---
+// --- MAP & LAYERS ---
 let map=L.map('map',{zoomControl:true}).setView([20,78],5);
 map.zoomControl.setPosition('topright');
 
-// --- LAYERS ---
 let layers={
 street:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
 sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}),
-terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17}),
+terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17})
 };
-let hybridBase=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
-let hybridLabels=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:20,opacity:0.7,attribution:'&copy; OpenStreetMap &copy; Carto'});
-let hybrid=L.layerGroup([hybridBase,hybridLabels]);
-layers.hybrid=hybrid;
+let hybridBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19});
+let hybridLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{
+  subdomains:'abcd', maxZoom:20, opacity:0.7, attribution:'&copy; OpenStreetMap &copy; Carto'
+});
+let hybrid = L.layerGroup([hybridBase, hybridLabels]);
+layers.hybrid = hybrid;
+
 layers.street.addTo(map);
-map.on('zoomend',()=>{if(map.hasLayer(hybridLabels)){if(map.getZoom()<=12) hybridLabels.setOpacity(0); else hybridLabels.setOpacity(0.7);}});
+map.on('zoomend', ()=>{ if(map.hasLayer(hybridLabels)) hybridLabels.setOpacity(map.getZoom()>12?0.7:0); });
 
 // --- VARIABLES ---
-let userMarker,watchId;
-let follow=true;
-let markers=[],line;
-let polyPoints=[],poly;
+let userMarker,watchId,follow=true;
+let markers=[],line,polyPoints=[],poly;
 let waypoints=[],navActive=false,currentWP=0;
 let headingAngle=0;
 
 // --- MAP SWITCH ---
-mapStyle.onchange=()=>{
-map.eachLayer(l=>map.removeLayer(l));
+mapStyle.onchange=()=>{ map.eachLayer(l=>map.removeLayer(l));
 if(mapStyle.value==="hybrid") layers.hybrid.addTo(map);
 else layers[mapStyle.value].addTo(map);
 if(userMarker) userMarker.addTo(map);
 if(line) line.addTo(map);
 if(poly) poly.addTo(map);
-map.invalidateSize();
 };
 
 // --- FOLLOW ---
@@ -140,8 +142,7 @@ map.on('dragstart zoomstart',()=>{follow=false; followBtn.innerText="📍 Follow
 // --- GPS ---
 gpsBtn.onclick=startGPS;
 function startGPS(){
-gpsStatus.innerText="📡 Searching…";
-gpsBtn.style.display="none";
+gpsStatus.innerText="📡 Searching…"; gpsBtn.style.display="none";
 watchId=navigator.geolocation.watchPosition(pos=>{
 let c=pos.coords;
 gpsStatus.innerText="✅ GPS Active";
@@ -150,49 +151,99 @@ else{userMarker.setLatLng([c.latitude,c.longitude]); if(follow) map.panTo([c.lat
 loc.innerText=`📍 ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}`;
 speed.innerText=`🚀 Speed: ${(c.speed?c.speed*3.6:0).toFixed(1)} km/h`;
 updateNav(c.latitude,c.longitude);
-map.invalidateSize();
 },err=>{gpsStatus.innerText="❌ GPS Denied"; gpsBtn.style.display="block";},{enableHighAccuracy:true});
 }
 
 // --- FULLSCREEN ---
 const floatFS=document.getElementById("floatFS");
 floatFS.onclick=()=>{
-if(!document.fullscreenElement){app.requestFullscreen(); app.classList.add("fullscreen"); floatFS.innerText="❎";}
-else{document.exitFullscreen(); app.classList.remove("fullscreen"); floatFS.innerText="⛶";}
-setTimeout(()=>map.invalidateSize(),300);
+if(!document.fullscreenElement){
+  app.requestFullscreen({navigationUI:"hide"}).catch(()=>{});
+  app.classList.add("fullscreen"); floatFS.innerText="❎";
+}else{document.exitFullscreen(); app.classList.remove("fullscreen"); floatFS.innerText="⛶";}
 }
 
 // --- AUTO FADE BUTTON ---
 let hideTimeout;
-function autoFadeFS(){ floatFS.style.opacity="1"; document.getElementById('northArrow').style.opacity="1"; clearTimeout(hideTimeout); hideTimeout=setTimeout(()=>{ floatFS.style.opacity="0.5"; document.getElementById('northArrow').style.opacity="0.5"; },3000);}
+function autoFadeFS(){
+  floatFS.style.opacity="1"; document.getElementById('northArrow').style.opacity="1";
+  clearTimeout(hideTimeout);
+  hideTimeout=setTimeout(()=>{
+    floatFS.style.opacity="0.5"; document.getElementById('northArrow').style.opacity="0.5";
+  },3000);
+}
 document.addEventListener("mousemove", autoFadeFS);
 document.addEventListener("touchstart", autoFadeFS);
 
 // --- COMPASS ---
-if(window.DeviceOrientationEvent){window.addEventListener('deviceorientation',e=>{if(e.alpha!=null){headingAngle=360-e.alpha;document.getElementById('northArrow').style.transform=`rotate(${headingAngle}deg)`;document.getElementById('heading').innerText=`Heading: ${Math.round(headingAngle)}°`;}})}
+if(window.DeviceOrientationEvent){
+  window.addEventListener('deviceorientation', e=>{
+    if(e.alpha!=null){ headingAngle=360-e.alpha;
+      document.getElementById('northArrow').style.transform=`rotate(${headingAngle}deg)`;
+      document.getElementById('heading').innerText=`Heading: ${Math.round(headingAngle)}°`;
+    }
+  });
+}
 
 // --- MARKERS & POLYGON ---
 addMarkerBtn.onclick=()=>{ let m=L.marker(map.getCenter(),{draggable:true}).addTo(map); m.on('drag',updateMetrics); markers.push(m); updateMetrics();}
 removeMarkerBtn.onclick=()=>{ if(markers.length){map.removeLayer(markers.pop()); updateMetrics();} }
 startPoly.onclick=()=>{ polyPoints=markers.map(m=>m.getLatLng()); if(poly) map.removeLayer(poly); poly=L.polygon(polyPoints).addTo(map); updateMetrics();}
 clearPoly.onclick=()=>{ if(poly) map.removeLayer(poly); poly=null; area.innerText=''; distance.innerText='';}
-function updateMetrics(){ if(line) map.removeLayer(line); if(markers.length>1){line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map); let d=0; for(let i=1;i<markers.length;i++) d+=markers[i-1].getLatLng().distanceTo(markers[i].getLatLng()); distance.innerText=`Distance: ${(d/1000).toFixed(2)} km`; } if(polyPoints.length>2){ let a=L.GeometryUtil.geodesicArea(polyPoints); area.innerText=`Area: ${(a/1e6).toFixed(3)} km²`; }}
+function updateMetrics(){
+  if(line) map.removeLayer(line);
+  if(markers.length>1){ line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
+    let d=0; for(let i=1;i<markers.length;i++) d+=markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
+    distance.innerText=`Distance: ${(d/1000).toFixed(2)} km`;
+  }
+  if(polyPoints.length>2){ let a=L.GeometryUtil.geodesicArea(polyPoints); area.innerText=`Area: ${(a/1e6).toFixed(3)} km²`; }
+}
 
-// --- DIRECTION TO MARKER ---
-dirBtn.onclick=()=>{ if(!markers.length) return alert('Add a marker first!'); let userLat=userMarker?userMarker.getLatLng().lat:0; let userLng=userMarker?userMarker.getLatLng().lng:0; let m=markers[0].getLatLng(); let angle=Math.atan2(m.lng-userLng,m.lat-userLat)*180/Math.PI; dirInfo.innerText=`Direction: ${Math.round(angle)}°`;}
+// --- DIRECTION ---
+dirBtn.onclick=()=>{
+if(!markers.length) return alert('Add a marker first!');
+let u=userMarker?userMarker.getLatLng():{lat:0,lng:0};
+let m=markers[0].getLatLng();
+let angle = Math.atan2(m.lng-u.lng,m.lat-u.lat)*180/Math.PI;
+dirInfo.innerText=`Direction: ${Math.round(angle)}°`;
+}
 
 // --- WAYPOINTS & NAVIGATION ---
 addWpBtn.onclick=()=>{ if(!userMarker) return; waypoints.push(userMarker.getLatLng()); wpInfo.innerText=`Waypoints: ${waypoints.length}`;}
 clearWpBtn.onclick=()=>{ waypoints=[]; wpInfo.innerText='Waypoints cleared'; navActive=false; navArrow.innerText='⬆'; remainDist.innerText=''; currentWP=0;}
 navBtn.onclick=()=>{ if(!waypoints.length) return; navActive=true; currentWP=0;}
-function updateNav(lat,lng){ if(!navActive || !waypoints.length) return; let wp=waypoints[currentWP]; let d=map.distance([lat,lng],wp); remainDist.innerText=`Distance to WP${currentWP+1}: ${(d/1000).toFixed(2)} km`; let angle=Math.atan2(wp.lng-lng,wp.lat-lat)*180/Math.PI; let arrow=document.getElementById('navArrow'); let rot=angle-headingAngle; arrow.style.transform=`rotate(${rot}deg)`; if(d<10){currentWP++; if(currentWP>=waypoints.length){navActive=false; arrow.innerText='✅'; remainDist.innerText='Arrived';}}}
-setInterval(()=>{ if(userMarker){ let p=userMarker.getLatLng(); updateNav(p.lat,p.lng); } },500);
+
+// --- NAV ARROW ---
+function updateNav(lat,lng){
+  if(!navActive || !waypoints.length) return;
+  let wp=waypoints[currentWP];
+  let d = map.distance([lat,lng], wp);
+  remainDist.innerText=`Distance to WP${currentWP+1}: ${(d/1000).toFixed(2)} km`;
+  let angle = Math.atan2(wp.lng-lng, wp.lat-lat)*180/Math.PI;
+  document.getElementById('navArrow').style.transform=`rotate(${angle-headingAngle}deg)`;
+  if(d<10){currentWP++; if(currentWP>=waypoints.length){navActive=false; document.getElementById('navArrow').innerText='✅'; remainDist.innerText='Arrived';}}
+}
+setInterval(()=>{ if(userMarker){ let p=userMarker.getLatLng(); updateNav(p.lat,p.lng); }},500);
 
 // --- LOCATION SEARCH ---
-searchInput.addEventListener("input",()=>{ let q=searchInput.value.trim(); if(!q){searchResults.innerHTML=''; return;} fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`) .then(res=>res.json()) .then(data=>{ searchResults.innerHTML=''; data.slice(0,5).forEach(loc=>{ let div=document.createElement('div'); div.innerText=loc.display_name; div.onclick=()=>{ map.setView([loc.lat,loc.lon],16); searchResults.innerHTML=''; }; searchResults.appendChild(div); }); }); });
+searchInput.addEventListener("input",()=>{
+  let q=searchInput.value.trim(); if(!q){searchResults.innerHTML=''; return;}
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`)
+    .then(res=>res.json()).then(data=>{
+      searchResults.innerHTML=''; data.slice(0,5).forEach(loc=>{
+        let div=document.createElement('div'); div.innerText=loc.display_name;
+        div.onclick=()=>{ map.setView([loc.lat, loc.lon],16); searchResults.innerHTML=''; };
+        searchResults.appendChild(div);
+      });
+    });
+});
 
-// --- SERVICE WORKER (PWA) ---
-if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(reg=>{console.log("SW registered:",reg);}).catch(err=>console.error("SW failed:",err)); }
+// --- SERVICE WORKER ---
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js')
+  .then(()=>console.log("Service Worker Registered"))
+  .catch(err=>console.log("SW Registration Failed:",err));
+}
 </script>
 </body>
 </html>
