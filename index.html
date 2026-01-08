@@ -12,34 +12,77 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-html,body{margin:0;height:100%;background:#0b1220;color:#fff;font-family:system-ui;}
-#app{max-width:480px;margin:auto;height:100%;display:flex;flex-direction:column}
-#map{height:60vh;border-radius:16px}
-
-.panel{background:rgba(255,255,255,.12);backdrop-filter:blur(12px);
-border-radius:14px;padding:8px;margin:6px;font-size:13px}
-
-button,input,select{
-width:100%;margin-top:5px;padding:8px;border-radius:10px;
-border:none;background:#1e293b;color:white
+html,body{
+margin:0;height:100%;
+background:#0b1220;color:#fff;
+font-family:system-ui
 }
 
-footer{text-align:center;font-size:11px;opacity:.6}
+#app{
+max-width:480px;
+margin:auto;height:100%;
+display:flex;
+flex-direction:column
+}
 
-/* floating buttons */
+#map{
+height:60vh;
+border-radius:16px
+}
+
+.panel{
+background:rgba(255,255,255,.12);
+backdrop-filter:blur(12px);
+border-radius:14px;
+padding:8px;margin:6px;
+font-size:13px
+}
+
+button,select{
+width:100%;
+margin-top:5px;
+padding:8px;
+border-radius:10px;
+border:none;
+background:#1e293b;
+color:white
+}
+
+footer{
+text-align:center;
+font-size:11px;
+opacity:.6
+}
+
+/* Floating buttons */
 .fab{
-position:fixed;width:50px;height:50px;border-radius:50%;
-background:#1e293b;color:white;border:none;
-display:flex;align-items:center;justify-content:center;
+position:fixed;
+width:50px;height:50px;
+border-radius:50%;
+background:#1e293b;
+color:white;
+border:none;
+display:flex;
+align-items:center;
+justify-content:center;
 box-shadow:0 4px 10px rgba(0,0,0,.6);
 z-index:9999
 }
 #fsBtn{right:16px;bottom:80px}
 #installBtn{right:16px;bottom:20px}
 
-/* fullscreen */
-#app.fullscreen{width:100vw;height:100vh}
-#app.fullscreen #map{height:100vh;border-radius:0}
+/* FULLSCREEN MODE */
+#app.fullscreen{
+width:100vw;height:100vh
+}
+#app.fullscreen #map{
+height:100vh;
+border-radius:0
+}
+#app.fullscreen .panel,
+#app.fullscreen footer{
+display:none
+}
 </style>
 </head>
 <body>
@@ -82,41 +125,59 @@ terrain:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png')
 
 let hybrid=L.layerGroup([
  layers.sat,
- L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{subdomains:'abcd'})
+ L.tileLayer(
+ 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
+ {subdomains:'abcd'}
+ )
 ]);
 
 layers.street.addTo(map);
 
+/* MAP STYLE */
 style.onchange=()=>{
 map.eachLayer(l=>map.removeLayer(l));
-if(style.value==="hybrid") hybrid.addTo(map);
-else layers[style.value].addTo(map);
+
+if(style.value==="hybrid")
+ hybrid.addTo(map);
+else
+ layers[style.value].addTo(map);
+
 if(userMarker) userMarker.addTo(map);
 };
 
 /* GPS */
 let userMarker,watchId;
+
 gpsBtn.onclick=()=>{
-gpsStatus.innerText="Searching…";
+gpsStatus.innerText="Requesting permission...";
+
+navigator.geolocation.getCurrentPosition(()=>{
 watchId=navigator.geolocation.watchPosition(p=>{
 let c=p.coords;
+
 gpsStatus.innerText="GPS Active";
+
 if(!userMarker){
  userMarker=L.marker([c.latitude,c.longitude]).addTo(map);
  map.setView([c.latitude,c.longitude],16);
-}else userMarker.setLatLng([c.latitude,c.longitude]);
+}else{
+ userMarker.setLatLng([c.latitude,c.longitude]);
+}
 
 loc.innerText=`Lat ${c.latitude.toFixed(5)} , Lng ${c.longitude.toFixed(5)}`;
 speed.innerText=`Speed ${(c.speed?c.speed*3.6:0).toFixed(1)} km/h`;
-},e=>{
-gpsStatus.innerText="GPS Denied";
+
+},{enableHighAccuracy:true});
+
+},()=>{
+gpsStatus.innerText="Permission denied";
 });
 };
 
 /* COMPASS */
 if(window.DeviceOrientationEvent){
-window.addEventListener('deviceorientation',e=>{
-if(e.alpha!=null){
+window.addEventListener('deviceorientationabsolute',e=>{
+if(e.alpha!==null){
 let h=Math.round(360-e.alpha);
 heading.innerText="Heading "+h+"°";
 }
@@ -126,24 +187,26 @@ heading.innerText="Heading "+h+"°";
 /* FULLSCREEN */
 fsBtn.onclick=()=>{
 if(!document.fullscreenElement){
-app.requestFullscreen();
+app.requestFullscreen().then(()=>{
 app.classList.add("fullscreen");
 fsBtn.innerText="❎";
+map.invalidateSize();
+});
 }else{
-document.exitFullscreen();
+document.exitFullscreen().then(()=>{
 app.classList.remove("fullscreen");
 fsBtn.innerText="⛶";
+map.invalidateSize();
+});
 }
 };
 
 /* SERVICE WORKER */
 if('serviceWorker' in navigator){
-navigator.serviceWorker.register('./sw.js')
-.then(()=>console.log("SW Registered"))
-.catch(e=>console.log("SW error",e));
+navigator.serviceWorker.register('./sw.js');
 }
 
-/* INSTALL PROMPT */
+/* INSTALL */
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt',e=>{
 e.preventDefault();
