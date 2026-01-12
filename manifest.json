@@ -1,14 +1,27 @@
 {
-  "name": "Naviser Ultimate",
+  "name": "Naviser – GPS & Navigation",
   "short_name": "Naviser",
-  "description": "Professional GPS Navigation App",
+  "description": "Offline-capable GPS navigation with compass, maps, markers, and area measurement.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0b1220",
-  "theme_color": "#1e293b",
   "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
   "icons": [
-    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},
-    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"}
-  ]
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["navigation", "maps", "travel", "utilities"],
+  "prefer_related_applications": false
 }
