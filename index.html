@@ -11,103 +11,19 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-body{
-  margin:0;
-  font-family:system-ui;
-  background:#0b1220;
-  color:#fff;
-  display:flex;
-  justify-content:center;
-}
-#app{
-  width:100%;
-  max-width:480px;
-  position:relative;
-}
-#map{
-  height:60vh;
-  border-radius:18px;
-  overflow:hidden;
-}
-.panel{
-  background:rgba(255,255,255,.12);
-  backdrop-filter:blur(12px);
-  border-radius:14px;
-  padding:10px;
-  margin-top:8px;
-  font-size:13px;
-}
-button{
-  border:none;
-  border-radius:12px;
-  padding:8px 10px;
-  font-size:13px;
-  background:#1e293b;
-  color:#fff;
-  cursor:pointer;
-}
-button:active{transform:scale(.97);}
-
-#floating{
-  position:absolute;
-  top:10px;
-  right:10px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  z-index:4000;
-}
-.round{
-  width:42px;
-  height:42px;
-  border-radius:50%;
-}
-
-#installBtn{
-  position:fixed;
-  bottom:80px;
-  right:20px;
-  z-index:9999;
-  background:#0b1220;
-  color:#fff;
-  padding:12px 18px;
-  border-radius:30px;
-  font-size:14px;
-  box-shadow:0 6px 20px rgba(0,0,0,.4);
-}
-
-#compassRing{
-  width:40px;
-  height:40px;
-  border-radius:50%;
-  border:2px solid #94a3b8;
-  position:relative;
-}
-#needle{
-  width:2px;
-  height:18px;
-  background:red;
-  position:absolute;
-  left:50%;
-  top:2px;
-  transform-origin:bottom;
-}
-
-#app.fullscreen{
-  width:100vw;
-  height:100vh;
-}
-#app.fullscreen #map{
-  height:100vh;
-  border-radius:0;
-}
-
-footer{
-  text-align:center;
-  font-size:11px;
-  opacity:.6;
-  margin:10px 0;
-}
+body{margin:0;font-family:system-ui;background:#0b1220;color:#fff;display:flex;justify-content:center}
+#app{width:100%;max-width:480px;position:relative}
+#map{height:60vh;border-radius:16px;overflow:hidden}
+.panel{background:rgba(255,255,255,.12);backdrop-filter:blur(10px);border-radius:14px;padding:10px;margin:8px}
+button{border:none;border-radius:12px;padding:8px 10px;background:#1e293b;color:#fff}
+#floating{position:absolute;top:10px;right:10px;z-index:5000}
+.round{width:42px;height:42px;border-radius:50%}
+#installBtn{position:fixed;bottom:80px;right:20px;z-index:9999;border-radius:30px;padding:12px 18px}
+#compassRing{width:40px;height:40px;border-radius:50%;border:2px solid #94a3b8;position:relative}
+#needle{width:2px;height:18px;background:red;position:absolute;left:50%;top:2px;transform-origin:bottom}
+#app.fullscreen{width:100vw;height:100vh}
+#app.fullscreen #map{height:100vh;border-radius:0}
+footer{text-align:center;font-size:11px;opacity:.6;margin:10px}
 </style>
 </head>
 
@@ -124,13 +40,10 @@ footer{
   <button id="gpsBtn">📡 Start GPS</button>
   <div id="gpsStatus">Waiting for GPS…</div>
   <div id="speed"></div>
-
   <div style="display:flex;gap:10px;align-items:center">
     <div id="compassRing"><div id="needle"></div></div>
     <div id="heading"></div>
   </div>
-
-  <div id="distance"></div>
   <div id="area"></div>
 </div>
 
@@ -140,7 +53,7 @@ footer{
   <button id="clearArea">❌ Clear</button>
 </div>
 
-<footer>© Manik Roy 2026. All Rights Reserved.</footer>
+<footer>© Manik Roy 2026</footer>
 
 <button id="installBtn" hidden>⬇ Install App</button>
 
@@ -148,120 +61,77 @@ footer{
 <script src="https://unpkg.com/leaflet-geometryutil"></script>
 
 <script>
-/* ================= MAP ================= */
-const map = L.map('map', { zoomControl:true }).setView([20,78],5);
-
-const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-const satellite = L.tileLayer(
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-);
-const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
-
+/* MAP */
+const map=L.map('map',{zoomControl:true}).setView([20,78],5);
+const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+const terrain=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
 street.addTo(map);
+L.control.layers({Street:street,Satellite:satellite,Terrain:terrain}).addTo(map);
 
-L.control.layers({
-  "Street": street,
-  "Satellite": satellite,
-  "Terrain": terrain
-}).addTo(map);
-
-/* ================= GPS ================= */
-let watchId = null;
-let lastPos = null;
-
-gpsBtn.onclick = () => {
-  if (!navigator.geolocation) {
-    gpsStatus.innerText = "❌ GPS not supported";
-    return;
-  }
-  gpsStatus.innerText = "📡 GPS Active";
-
-  watchId = navigator.geolocation.watchPosition(pos=>{
-    const c = pos.coords;
-    const spd = (c.speed || 0) * 3.6;
-    speed.innerText = `Speed: ${spd.toFixed(1)} km/h`;
-    lastPos = c;
-  },err=>{
-    gpsStatus.innerText = "❌ GPS Denied";
-  },{enableHighAccuracy:true});
+/* GPS */
+let watchId=null;
+gpsBtn.onclick=()=>{
+ if(!navigator.geolocation){gpsStatus.innerText="❌ GPS not supported";return;}
+ gpsStatus.innerText="📡 GPS Active";
+ watchId=navigator.geolocation.watchPosition(p=>{
+   speed.innerText=`Speed: ${((p.coords.speed||0)*3.6).toFixed(1)} km/h`;
+ },()=>gpsStatus.innerText="❌ GPS Denied",{enableHighAccuracy:true});
 };
 
-/* ================= COMPASS ================= */
-if (window.DeviceOrientationEvent) {
-  window.addEventListener('deviceorientationabsolute', e=>{
-    if (e.alpha !== null) {
-      const heading = Math.round(e.alpha);
-      needle.style.transform = `rotate(${heading}deg)`;
-      document.getElementById("heading").innerText = `Heading: ${heading}°`;
-    }
-  }, true);
+/* COMPASS (SAFE) */
+if ('DeviceOrientationEvent' in window) {
+ window.addEventListener('deviceorientation',e=>{
+  if(e.alpha!==null){
+   const h=Math.round(e.alpha);
+   needle.style.transform=`rotate(${h}deg)`;
+   heading.innerText=`Heading: ${h}°`;
+  }
+ });
 }
 
-/* ================= MARKERS ================= */
-let markers = [], poly = null;
-
-addMarker.onclick = () => {
-  const m = L.marker(map.getCenter(), { draggable:true }).addTo(map);
-  m.on('drag', updateMetrics);
-  markers.push(m);
-  updateMetrics();
+/* AREA */
+let markers=[],poly=null;
+addMarker.onclick=()=>{
+ const m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
+ m.on('drag',updateArea); markers.push(m); updateArea();
 };
-
-removeMarker.onclick = () => {
-  if (markers.length) {
-    map.removeLayer(markers.pop());
-    updateMetrics();
-  }
+removeMarker.onclick=()=>{
+ if(markers.length){map.removeLayer(markers.pop()); updateArea();}
 };
-
-clearArea.onclick = () => {
-  if (poly) map.removeLayer(poly);
-  poly = null;
-  area.innerText = '';
+clearArea.onclick=()=>{
+ if(poly) map.removeLayer(poly); poly=null; area.innerText='';
 };
-
-function updateMetrics(){
-  if (poly) map.removeLayer(poly);
-  if (markers.length > 2) {
-    poly = L.polygon(markers.map(m=>m.getLatLng())).addTo(map);
-    const a = L.GeometryUtil.geodesicArea(poly.getLatLngs()[0]);
-    area.innerText = `Area: ${(a/1e6).toFixed(3)} km²`;
-  }
+function updateArea(){
+ if(poly) map.removeLayer(poly);
+ if(markers.length>2){
+  poly=L.polygon(markers.map(m=>m.getLatLng())).addTo(map);
+  area.innerText=`Area: ${(L.GeometryUtil.geodesicArea(poly.getLatLngs()[0])/1e6).toFixed(3)} km²`;
+ }
 }
 
-/* ================= FULLSCREEN ================= */
-fsBtn.onclick = () => {
-  if (!document.fullscreenElement) {
-    app.requestFullscreen();
-    app.classList.add("fullscreen");
-  } else {
-    document.exitFullscreen();
-    app.classList.remove("fullscreen");
-  }
+/* FULLSCREEN */
+fsBtn.onclick=()=>{
+ if(!document.fullscreenElement){app.requestFullscreen().catch(()=>{});app.classList.add('fullscreen');}
+ else{document.exitFullscreen();app.classList.remove('fullscreen');}
 };
 
-/* ================= PWA ================= */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", ()=>{
-    navigator.serviceWorker.register("./sw.js");
-  });
-}
-
+/* PWA INSTALL */
 let deferredPrompt;
-const installBtn = document.getElementById("installBtn");
-
-window.addEventListener("beforeinstallprompt", e=>{
-  e.preventDefault();
-  deferredPrompt = e;
-  installBtn.hidden = false;
+const installBtn=document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt',e=>{
+ e.preventDefault(); deferredPrompt=e; installBtn.hidden=false;
 });
-
-installBtn.onclick = async ()=>{
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  installBtn.hidden = true;
-  deferredPrompt = null;
+installBtn.onclick=async()=>{
+ if(!deferredPrompt) return;
+ deferredPrompt.prompt(); await deferredPrompt.userChoice;
+ installBtn.hidden=true; deferredPrompt=null;
 };
+
+/* SERVICE WORKER */
+if('serviceWorker' in navigator){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
+}
 </script>
 
 </div>
