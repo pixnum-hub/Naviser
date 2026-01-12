@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <title>Naviser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="./Naviser/manifest.json">
 <meta name="theme-color" content="#0b1220">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -15,8 +14,8 @@ body{margin:0;font-family:system-ui;background:#0b1220;color:#fff;display:flex;j
 #app{width:100%;max-width:480px;position:relative}
 #map{height:60vh;border-radius:16px;overflow:hidden}
 .panel{background:rgba(255,255,255,.12);backdrop-filter:blur(10px);border-radius:14px;padding:10px;margin:8px}
-button{border:none;border-radius:12px;padding:8px 10px;background:#1e293b;color:#fff}
-#floating{position:absolute;top:10px;right:10px;z-index:5000}
+button{border:none;border-radius:12px;padding:8px 10px;background:#1e293b;color:#fff;cursor:pointer}
+#floating{position:absolute;top:10px;right:10px;z-index:5000;display:flex;flex-direction:column;gap:8px}
 .round{width:42px;height:42px;border-radius:50%}
 #installBtn{position:fixed;bottom:80px;right:20px;z-index:9999;border-radius:30px;padding:12px 18px}
 #compassRing{width:40px;height:40px;border-radius:50%;border:2px solid #94a3b8;position:relative}
@@ -26,12 +25,11 @@ button{border:none;border-radius:12px;padding:8px 10px;background:#1e293b;color:
 footer{text-align:center;font-size:11px;opacity:.6;margin:10px}
 </style>
 </head>
-
 <body>
 <div id="app">
 
 <div id="floating">
-  <button id="fsBtn" class="round">⛶</button>
+  <button id="fsBtn" class="round" title="Fullscreen">⛶</button>
 </div>
 
 <div id="map"></div>
@@ -44,24 +42,24 @@ footer{text-align:center;font-size:11px;opacity:.6;margin:10px}
     <div id="compassRing"><div id="needle"></div></div>
     <div id="heading"></div>
   </div>
+  <div id="distance"></div>
   <div id="area"></div>
 </div>
 
 <div class="panel">
   <button id="addMarker">➕ Marker</button>
   <button id="removeMarker">➖ Marker</button>
+  <button id="toggleUnit">↔ km/mi</button>
   <button id="clearArea">❌ Clear</button>
 </div>
 
 <footer>© Manik Roy 2026</footer>
-
 <button id="installBtn" hidden>⬇ Install App</button>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-geometryutil"></script>
 
 <script>
-/* MAP */
 const map=L.map('map',{zoomControl:true}).setView([20,78],5);
 const street=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 const satellite=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
@@ -69,54 +67,82 @@ const terrain=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
 street.addTo(map);
 L.control.layers({Street:street,Satellite:satellite,Terrain:terrain}).addTo(map);
 
-/* GPS */
+/* Variables */
 let watchId=null;
+let km=true;
+let userMarker=null,lastPos=null;
+let markers=[],poly=null,line=null;
+
+/* GPS */
 gpsBtn.onclick=()=>{
  if(!navigator.geolocation){gpsStatus.innerText="❌ GPS not supported";return;}
  gpsStatus.innerText="📡 GPS Active";
- watchId=navigator.geolocation.watchPosition(p=>{
-   speed.innerText=`Speed: ${((p.coords.speed||0)*3.6).toFixed(1)} km/h`;
- },()=>gpsStatus.innerText="❌ GPS Denied",{enableHighAccuracy:true});
+ if(watchId) navigator.geolocation.clearWatch(watchId);
+ watchId=navigator.geolocation.watchPosition(pos=>{
+   let c=pos.coords;
+   if(!userMarker){userMarker=L.marker([c.latitude,c.longitude]).addTo(map); map.setView([c.latitude,c.longitude],16);}
+   else userMarker.setLatLng([c.latitude,c.longitude]);
+   speed.innerText=`Speed: ${((c.speed||0)*3.6).toFixed(1)} km/h`;
+   if(lastPos){
+     let b=bearingCalc(lastPos.lat,lastPos.lng,c.latitude,c.longitude);
+     distance.innerText=`Bearing: ${Math.round(b)}°`;
+   }
+   lastPos={lat:c.latitude,lng:c.longitude};
+ },err=>{gpsStatus.innerText="❌ GPS Error: "+err.message},{enableHighAccuracy:true,timeout:20000,maximumAge:0});
 };
 
-/* COMPASS (SAFE) */
-if ('DeviceOrientationEvent' in window) {
+/* Compass */
+if(window.DeviceOrientationEvent){
  window.addEventListener('deviceorientation',e=>{
-  if(e.alpha!==null){
-   const h=Math.round(e.alpha);
-   needle.style.transform=`rotate(${h}deg)`;
-   heading.innerText=`Heading: ${h}°`;
-  }
+   if(e.alpha!=null){
+     let h=Math.round(e.alpha);
+     needle.style.transform=`rotate(${h}deg)`;
+     heading.innerText=`Heading: ${h}°`;
+   }
  });
 }
 
-/* AREA */
-let markers=[],poly=null;
+/* Markers & Polygon */
 addMarker.onclick=()=>{
  const m=L.marker(map.getCenter(),{draggable:true}).addTo(map);
- m.on('drag',updateArea); markers.push(m); updateArea();
+ m.on('drag',updateMetrics); markers.push(m); updateMetrics();
 };
 removeMarker.onclick=()=>{
- if(markers.length){map.removeLayer(markers.pop()); updateArea();}
+ if(markers.length){map.removeLayer(markers.pop()); updateMetrics();}
 };
 clearArea.onclick=()=>{
- if(poly) map.removeLayer(poly); poly=null; area.innerText='';
+ if(poly) map.removeLayer(poly); poly=null; area.innerText=''; distance.innerText=''; 
 };
-function updateArea(){
- if(poly) map.removeLayer(poly);
+toggleUnit.onclick=()=>{km=!km;updateMetrics();};
+
+function updateMetrics(){
+ if(line) map.removeLayer(line); if(poly) map.removeLayer(poly);
+ if(markers.length>1){
+   line=L.polyline(markers.map(m=>m.getLatLng())).addTo(map);
+   let d=0; for(let i=1;i<markers.length;i++) d+=markers[i-1].getLatLng().distanceTo(markers[i].getLatLng());
+   distance.innerText=`Distance: ${(km?d/1000:d/1609).toFixed(2)} ${km?'km':'mi'}`;
+ }
  if(markers.length>2){
-  poly=L.polygon(markers.map(m=>m.getLatLng())).addTo(map);
-  area.innerText=`Area: ${(L.GeometryUtil.geodesicArea(poly.getLatLngs()[0])/1e6).toFixed(3)} km²`;
+   poly=L.polygon(markers.map(m=>m.getLatLng())).addTo(map);
+   let a=L.GeometryUtil.geodesicArea(poly.getLatLngs()[0]);
+   area.innerText=`Area: ${(a/1e6).toFixed(3)} km²`;
  }
 }
 
-/* FULLSCREEN */
+function bearingCalc(lat1,lng1,lat2,lng2){
+ let dLon=(lng2-lng1)*Math.PI/180;
+ let y=Math.sin(dLon)*Math.cos(lat2*Math.PI/180);
+ let x=Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)-Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
+ return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+/* Fullscreen */
 fsBtn.onclick=()=>{
  if(!document.fullscreenElement){app.requestFullscreen().catch(()=>{});app.classList.add('fullscreen');}
  else{document.exitFullscreen();app.classList.remove('fullscreen');}
 };
 
-/* PWA INSTALL */
+/* PWA Install */
 let deferredPrompt;
 const installBtn=document.getElementById('installBtn');
 window.addEventListener('beforeinstallprompt',e=>{
@@ -128,12 +154,11 @@ installBtn.onclick=async()=>{
  installBtn.hidden=true; deferredPrompt=null;
 };
 
-/* SERVICE WORKER */
+/* Service Worker */
 if('serviceWorker' in navigator){
- window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
+ window.addEventListener('load',()=>navigator.serviceWorker.register('./Naviser/sw.js',{scope:'./Naviser/'}));
 }
 </script>
-
 </div>
 </body>
 </html>
